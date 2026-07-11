@@ -1,0 +1,57 @@
+# ============================================================
+# QuantSeed .gitignore
+# ============================================================
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# 虚拟环境
+venv/
+.venv/
+env/
+.env
+# 注意: .env.example 需要提交
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 操作系统
+.DS_Store
+Thumbs.db
+
+# 数据文件（大数据量，不提交到Git）
+data/daily/*.csv
+
+# 日志
+logs/*.log
+*.log
+
+# 输出
+output/*.csv
+output/*.json
+
+# 数据库文件
+*.db
+*.sqlite3
+
+# Docker
+.docker/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# 临时文件
+*.tmp
+*.temp

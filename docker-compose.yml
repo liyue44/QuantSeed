@@ -1,0 +1,110 @@
+# ============================================================
+# QuantSeed docker-compose.yml
+# ============================================================
+# 使用方式：
+#   1. 开发环境（仅后端 + Streamlit）：
+#      docker-compose up -d
+#
+#   2. 生产环境（含 PostgreSQL）：
+#      docker-compose --profile production up -d
+#
+#   3. 停止服务：
+#      docker-compose down
+# ============================================================
+
+version: "3.9"
+
+services:
+  # ==================== 后端 API 服务 ====================
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: quantseed-api
+    ports:
+      - "8000:8000"
+    environment:
+      # 数据库配置
+      - DB_TYPE=sqlite
+      - DB_PATH=/app/data/quantseed.db
+      # PostgreSQL 配置（切换时取消注释下面几行，并注释上面两行）
+      # - DB_TYPE=postgresql
+      # - PG_HOST=postgres
+      # - PG_PORT=5432
+      # - PG_USER=quantseed
+      # - PG_PASSWORD=changeme
+      # - PG_DATABASE=quantseed
+      # 日志级别
+      - LOG_LEVEL=INFO
+    volumes:
+      # 持久化数据（SQLite 数据库文件、CSV数据、日志）
+      - quantseed_data:/app/data
+      - quantseed_logs:/app/logs
+      - quantseed_output:/app/output
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - quantseed-net
+
+  # ==================== 前端 Streamlit 服务 ====================
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.streamlit
+    container_name: quantseed-frontend
+    ports:
+      - "8501:8501"
+    environment:
+      # 后端 API 地址（容器内部通过服务名访问）
+      - API_BASE_URL=http://api:8000
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - quantseed-net
+
+  # ==================== PostgreSQL 数据库（可选，生产环境） ====================
+  postgres:
+    image: postgres:16-alpine
+    container_name: quantseed-postgres
+    profiles:
+      - production  # 仅在 --profile production 时启动
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=quantseed
+      - POSTGRES_PASSWORD=changeme
+      - POSTGRES_DB=quantseed
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U quantseed -d quantseed"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - quantseed-net
+
+# ==================== 数据卷 ====================
+volumes:
+  quantseed_data:
+    name: quantseed_data
+  quantseed_logs:
+    name: quantseed_logs
+  quantseed_output:
+    name: quantseed_output
+  postgres_data:
+    name: quantseed_postgres_data
+
+# ==================== 网络 ====================
+networks:
+  quantseed-net:
+    name: quantseed-net
+    driver: bridge
