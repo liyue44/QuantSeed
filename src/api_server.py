@@ -37,8 +37,8 @@ from backtest_engine import BacktestEngine
 
 # ==================== 数据库模块（SQLite 本地存储） ====================
 from database import (
-    init_db, get_db, StockInfo, DailyData, SignalRecord,
-    BacktestResult, SystemConfig,
+    init_db, get_db, get_db_session, StockInfo, DailyData, SignalRecord,
+    BacktestResult, SystemConfig, ChatUser, ChatMessage,
 )
 
 logger = setup_logging("APIServer")
@@ -549,3 +549,198 @@ def system_info():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+
+# ==================== 聊天室 + 认证模块 ====================
+import hashlib
+from pydantic import BaseModel
+from fastapi import Depends
+from sqlalchemy.orm import Session
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class RegisterRequest(BaseModel):
+    username: str
+    password: str
+
+
+class ChatSendRequest(BaseModel):
+    username: str
+    content: str
+
+
+def _hash_password(password: str) -> str:
+    """密码哈希"""
+    return hashlib.sha256(password.encode()).hexdigest()
+
+
+def _verify_quantseed_password(password: str) -> bool:
+    """验证量化模块密码"""
+    return password == "quantseed"
+
+
+# ==================== 认证 API ====================
+
+@app.post("/api/auth/login")
+def chat_login(req: LoginRequest):
+    """聊天室登录"""
+    db = get_db_session()
+    try:
+        user = db.query(ChatUser).filter_by(username=req.username).first()
+        if not user:
+            # 自动注册新用户
+            pw_hash = _hash_password(req.password)
+            new_user = ChatUser(username=req.username, password=pw_hash, is_admin=False)
+            db.add(new_user)
+            db.commit()
+            return {"success": True, "username": req.username, "is_admin": False, "is_new": True}
+
+        if user.password != _hash_password(req.password):
+            raise HTTPException(status_code=401, detail="密码错误")
+
+        # 更新最后登录时间
+        user.last_login = datetime.now()
+        db.commit()
+        return {"success": True, "username": req.username, "is_admin": user.is_admin, "is_new": False}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+
+@app.post("/api/auth/register")
+def chat_register(req: RegisterRequest):
+    """聊天室注册"""
+    db = get_db_session()
+    try:
+        existing = db.query(ChatUser).filter_by(username=req.username).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="用户名已存在")
+
+        pw_hash = _hash_password(req.password)
+        user = ChatUser(username=req.username, password=pw_hash, is_admin=False)
+        db.add(user)
+        db.commit()
+        return {"success": True, "username": req.username}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+
+@app.post("/api/auth/verify-quantseed")
+def verify_quantseed(password: str):
+    """验证量化模块密码"""
+    if _verify_quantseed_password(password):
+        return {"success": True}
+    raise HTTPException(status_code=401, detail="密码错误")
+
+
+# ==================== 聊天消息 API ====================
+
+@app.get("/api/chat/messages")
+def get_chat_messages(
+    limit: int = Query(default=50, ge=1, le=200, description="获取条数"),
+):
+    """获取最近的聊天消息"""
+    db = get_db_session()
+    try:
+        messages = db.query(ChatMessage).order_by(ChatMessage.id.desc()).limit(limit).all()
+        result = []
+        for m in reversed(messages):
+            result.append({
+                "id": m.id,
+                "username": m.username,
+                "content": m.content,
+                "created_at": m.created_at.strftime("%H:%M:%S"),
+                "created_date": m.created_at.strftime("%Y-%m-%d"),
+                "created_full": m.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+            })
+        return {"messages": result, "count": len(result)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+
+@app.post("/api/chat/send")
+def send_chat_message(req: ChatSendRequest):
+    """发送聊天消息"""
+    db = get_db_session()
+    try:
+        msg = ChatMessage(username=req.username, content=req.content)
+        db.add(msg)
+        db.commit()
+        db.refresh(msg)
+        return {
+            "success": True,
+            "message": {
+                "id": msg.id,
+                "username": msg.username,
+                "content": msg.content,
+                "created_at": msg.created_at.strftime("%H:%M:%S"),
+                "created_full": msg.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+            }
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+
+@app.delete("/api/chat/messages")
+def clear_chat_messages(username: str):
+    """管理员清空聊天记录"""
+    db = get_db_session()
+    try:
+        user = db.query(ChatUser).filter_by(username=username, is_admin=True).first()
+        if not user:
+            raise HTTPException(status_code=403, detail="仅管理员可清空聊天记录")
+
+        db.query(ChatMessage).delete()
+        db.commit()
+        return {"success": True, "message": "聊天记录已清空"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+
+@app.delete("/api/chat/messages/{message_id}")
+def delete_chat_message(message_id: int, username: str):
+    """删除单条消息（管理员或消息发送者）"""
+    db = get_db_session()
+    try:
+        user = db.query(ChatUser).filter_by(username=username).first()
+        if not user:
+            raise HTTPException(status_code=403, detail="用户不存在")
+
+        msg = db.query(ChatMessage).filter_by(id=message_id).first()
+        if not msg:
+            raise HTTPException(status_code=404, detail="消息不存在")
+
+        if not user.is_admin and msg.username != username:
+            raise HTTPException(status_code=403, detail="无权删除他人消息")
+
+        db.delete(msg)
+        db.commit()
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
