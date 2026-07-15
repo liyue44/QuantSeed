@@ -426,7 +426,7 @@ def _render_step4_simulation(df, fast, slow):
     # 交易明细表
     st.markdown("#### 📊 每笔交易明细")
     trade_df = pd.DataFrame(trades)
-    trade_df["profit_pct"] = trade_df["profit_pct"].apply(lambda x: f"{x:+.2f}%")
+    trade_df["收益率"] = trade_df["profit_pct_raw"].apply(lambda x: f"{x:+.2f}%")
     st.dataframe(trade_df, width="stretch", hide_index=True)
 
     # 收益分布图
