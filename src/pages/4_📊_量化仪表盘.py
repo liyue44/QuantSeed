@@ -80,6 +80,34 @@ def init_session_state():
 
 init_session_state()
 
+# ==================== 响应式 CSS ====================
+st.markdown("""
+<style>
+    @media (max-width: 768px) {
+        .stApp { padding: 0.5rem !important; }
+        h1 { font-size: 1.4rem !important; }
+        h3 { font-size: 1rem !important; }
+        .stButton button {
+            font-size: 0.85rem !important;
+            padding: 0.5rem 0.8rem !important;
+        }
+        [data-testid="stMetric"] {
+            padding: 0.4rem !important;
+        }
+        [data-testid="stMetric"] label {
+            font-size: 0.7rem !important;
+        }
+        [data-testid="stMetric"] div[data-testid="stMetricValue"] {
+            font-size: 1.1rem !important;
+        }
+    }
+    @media (max-width: 480px) {
+        h1 { font-size: 1.2rem !important; }
+        .stButton button { font-size: 0.8rem !important; padding: 0.4rem 0.6rem !important; }
+    }
+</style>
+""", unsafe_allow_html=True)
+
 # ==================== 标题栏 ====================
 st.title("🌱 QuantSeed 量化种子")
 st.markdown("### 离线回测与策略监控平台")
@@ -126,6 +154,120 @@ with st.sidebar:
         if st.button("📊 查看数据状态", width="stretch"):
             st.session_state.data_loaded = True
             st.rerun()
+
+    st.divider()
+
+    # ---- 自定义股票管理 ----
+    st.subheader("➕ 自定义股票")
+
+    if "show_add_stock" not in st.session_state:
+        st.session_state.show_add_stock = False
+
+    if st.button("➕ 添加股票", width="stretch"):
+        st.session_state.show_add_stock = not st.session_state.show_add_stock
+
+    if st.session_state.show_add_stock:
+        st.markdown("---")
+        st.markdown("#### 🔍 添加自定义股票")
+
+        new_code = st.text_input(
+            "股票代码",
+            key="add_stock_code",
+            placeholder="如 600519 或 600519.XSHG",
+            help="6开头自动识别为上海(XSHG)，0/3开头自动识别为深圳(XSHE)"
+        )
+
+        col_v, col_a = st.columns(2)
+        with col_v:
+            if st.button("🔍 验证代码", width="stretch", key="btn_verify"):
+                if not new_code.strip():
+                    st.error("请输入股票代码")
+                else:
+                    with st.spinner("正在验证..."):
+                        try:
+                            import requests
+                            from config import API_BASE_URL
+                            resp = requests.post(
+                                f"{API_BASE_URL}/api/stocks/custom/verify",
+                                json={"code": new_code.strip()},
+                                timeout=15,
+                            )
+                            data = resp.json()
+                            if data.get("valid"):
+                                if data.get("exists"):
+                                    st.warning(f"⚠️ {data['message']}")
+                                else:
+                                    st.success(f"✅ {data['message']}")
+                                    st.session_state.verified_code = new_code.strip()
+                                    if "name" in data:
+                                        st.session_state.verified_name = data["name"]
+                            else:
+                                st.error(data.get("detail", "验证失败"))
+                        except Exception as e:
+                            st.error(f"验证请求失败：{e}")
+
+        with col_a:
+            if st.button("✅ 确认添加", width="stretch", key="btn_add", type="primary"):
+                code_to_add = st.session_state.get("verified_code", new_code.strip())
+                if not code_to_add:
+                    st.error("请先验证股票代码")
+                else:
+                    with st.spinner("正在添加..."):
+                        try:
+                            import requests
+                            from config import API_BASE_URL
+                            resp = requests.post(
+                                f"{API_BASE_URL}/api/stocks/custom/add",
+                                json={"code": code_to_add},
+                                timeout=15,
+                            )
+                            data = resp.json()
+                            if data.get("success"):
+                                st.success(f"✅ {data['message']}")
+                                st.session_state.verified_code = None
+                                st.session_state.verified_name = None
+                                st.session_state.show_add_stock = False
+                                # 清除 DataManager 缓存
+                                get_data_manager.clear()
+                                st.cache_resource.clear()
+                                st.rerun()
+                            else:
+                                st.error(data.get("detail", "添加失败"))
+                        except Exception as e:
+                            st.error(f"添加请求失败：{e}")
+
+    # 显示已添加的自定义股票
+    try:
+        import requests
+        from config import API_BASE_URL
+        resp = requests.get(f"{API_BASE_URL}/api/stocks/custom/list", timeout=5)
+        if resp.status_code == 200:
+            custom_stocks = resp.json().get("stocks", [])
+            if custom_stocks:
+                st.markdown("---")
+                st.markdown("##### 📌 我的自定义股票")
+                for s in custom_stocks:
+                    col_s, col_d = st.columns([4, 1])
+                    with col_s:
+                        st.markdown(f"**{s['name']}** · `{s['code']}`")
+                    with col_d:
+                        if st.button("🗑️", key=f"del_{s['code']}", help=f"删除 {s['code']}"):
+                            try:
+                                del_resp = requests.delete(
+                                    f"{API_BASE_URL}/api/stocks/custom/{s['code']}",
+                                    timeout=5,
+                                )
+                                if del_resp.status_code == 200:
+                                    st.success(f"已删除 {s['name']}")
+                                    get_data_manager.clear()
+                                    st.cache_resource.clear()
+                                    st.rerun()
+                                else:
+                                    st.error("删除失败")
+                            except Exception as e:
+                                st.error(f"删除请求失败：{e}")
+    except Exception:
+        pass
 
     st.divider()
 

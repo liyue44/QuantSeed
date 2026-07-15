@@ -38,7 +38,7 @@ from backtest_engine import BacktestEngine
 # ==================== 数据库模块（SQLite 本地存储） ====================
 from database import (
     init_db, get_db, get_db_session, StockInfo, DailyData, SignalRecord,
-    BacktestResult, SystemConfig, ChatUser, ChatMessage,
+    BacktestResult, SystemConfig, UserStock,
 )
 
 logger = setup_logging("APIServer")
@@ -106,15 +106,26 @@ def health_check():
 # ==================== 股票信息 ====================
 @app.get("/api/stocks")
 def list_stocks():
-    """获取股票池列表"""
+    """获取股票池列表（默认35只 + 用户自定义）"""
     dm = get_dm()
     available = dm.get_available_stocks()
+
+    # 获取用户自定义股票列表
+    db = get_db_session()
+    try:
+        user_codes = set(row[0] for row in db.query(UserStock.code).all())
+    except Exception:
+        user_codes = set()
+    finally:
+        db.close()
+
     result = []
-    for code in DEFAULT_STOCK_POOL:
+    for code in dm.stock_pool:
         result.append({
             "code": code,
             "name": dm.get_stock_name(code),
             "has_data": code in available,
+            "is_custom": code in user_codes,
         })
     return result
 
@@ -127,6 +138,185 @@ def get_stock_info(code: str):
         "code": code,
         "name": dm.get_stock_name(code),
     }
+
+
+# ==================== 自定义股票管理 ====================
+
+from pydantic import BaseModel
+
+
+class AddStockRequest(BaseModel):
+    code: str
+
+
+@app.post("/api/stocks/custom/verify")
+def verify_stock(req: AddStockRequest):
+    """
+    验证股票代码是否存在、能否拉取数据。
+    返回股票名称和基本信息，验证通过后才能添加。
+    """
+    code = req.code.strip()
+    if not code:
+        raise HTTPException(status_code=400, detail="股票代码不能为空")
+
+    # 自动补全后缀
+    if "." not in code:
+        if code.startswith("6"):
+            code = f"{code}.XSHG"
+        elif code.startswith(("0", "3")):
+            code = f"{code}.XSHE"
+        else:
+            raise HTTPException(status_code=400, detail="无法识别的股票代码格式，请使用如 600519 或 600519.XSHG")
+
+    # 检查是否已在股票池中
+    dm = get_dm()
+    if code in dm.stock_pool:
+        name = dm.get_stock_name(code)
+        return {"valid": True, "code": code, "name": name, "exists": True, "message": "该股票已在股票池中"}
+
+    # 尝试从 akshare 获取数据验证
+    try:
+        tx_code = DataManager._code_to_tx(code)
+        end_date = datetime.now().strftime("%Y%m%d")
+        start_date = (datetime.now() - timedelta(days=5)).strftime("%Y%m%d")
+
+        df = ak.stock_zh_a_hist_tx(
+            symbol=tx_code,
+            start_date=start_date,
+            end_date=end_date,
+            adjust="qfq",
+            timeout=10.0,
+        )
+        if df is None or df.empty:
+            raise HTTPException(status_code=404, detail=f"无法获取 {code} 的行情数据，请检查代码是否正确")
+
+        # 获取股票名称
+        name = dm.get_stock_name(code)
+
+        # 获取最新行情
+        latest = df.iloc[-1]
+        return {
+            "valid": True,
+            "code": code,
+            "name": name,
+            "exists": False,
+            "latest_close": float(latest.get("close", 0)) if "close" in df.columns else None,
+            "latest_date": str(latest.get("date", "")),
+            "message": f"验证成功！{name}({code}) 数据可正常获取",
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"验证失败：{str(e)}。请确认代码正确，例如：600519.XSHG 或 000001.XSHE")
+
+
+@app.post("/api/stocks/custom/add")
+def add_custom_stock(req: AddStockRequest):
+    """
+    添加自定义股票到数据库。
+    必须先通过 verify 验证通过后才能添加。
+    """
+    code = req.code.strip()
+    if not code:
+        raise HTTPException(status_code=400, detail="股票代码不能为空")
+
+    dm = get_dm()
+
+    # 检查是否已在默认池中
+    if code in DEFAULT_STOCK_POOL:
+        raise HTTPException(status_code=400, detail=f"{code} 已在默认股票池中，无需添加")
+
+    # 验证代码格式并获取名称
+    try:
+        tx_code = DataManager._code_to_tx(code)
+        end_date = datetime.now().strftime("%Y%m%d")
+        start_date = (datetime.now() - timedelta(days=5)).strftime("%Y%m%d")
+        df = ak.stock_zh_a_hist_tx(
+            symbol=tx_code, start_date=start_date, end_date=end_date,
+            adjust="qfq", timeout=10.0,
+        )
+        if df is None or df.empty:
+            raise HTTPException(status_code=404, detail=f"无法获取 {code} 的数据")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"数据验证失败：{str(e)}")
+
+    name = dm.get_stock_name(code)
+    exchange = code.split(".")[-1] if "." in code else ""
+
+    # 存入数据库
+    db = get_db_session()
+    try:
+        existing = db.query(UserStock).filter_by(code=code).first()
+        if existing:
+            return {"success": True, "code": code, "name": existing.name, "message": "该股票已在自定义列表中", "is_new": False}
+
+        new_stock = UserStock(code=code, name=name, exchange=exchange)
+        db.add(new_stock)
+        db.commit()
+
+        # 刷新 DataManager 的股票池缓存
+        global _data_manager
+        _data_manager = None
+
+        logger.info(f"用户添加自定义股票：{code} {name}")
+        return {"success": True, "code": code, "name": name, "message": f"成功添加 {name}({code})", "is_new": True}
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"添加失败：{str(e)}")
+    finally:
+        db.close()
+
+
+@app.get("/api/stocks/custom/list")
+def list_custom_stocks():
+    """获取用户自定义股票列表"""
+    db = get_db_session()
+    try:
+        stocks = db.query(UserStock).order_by(UserStock.added_at.desc()).all()
+        return {
+            "stocks": [
+                {"code": s.code, "name": s.name, "exchange": s.exchange, "added_at": s.added_at.isoformat()}
+                for s in stocks
+            ],
+            "count": len(stocks),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+
+@app.delete("/api/stocks/custom/{code}")
+def delete_custom_stock(code: str):
+    """删除用户自定义股票"""
+    db = get_db_session()
+    try:
+        stock = db.query(UserStock).filter_by(code=code).first()
+        if not stock:
+            raise HTTPException(status_code=404, detail=f"未找到自定义股票 {code}")
+
+        name = stock.name
+        db.delete(stock)
+        db.commit()
+
+        # 刷新 DataManager 缓存
+        global _data_manager
+        _data_manager = None
+
+        logger.info(f"用户删除自定义股票：{code} {name}")
+        return {"success": True, "code": code, "name": name, "message": f"已删除 {name}({code})"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
 
 
 # ==================== 行情数据 ====================
@@ -262,7 +452,7 @@ def get_market_panel(
     批量获取行情面板数据（股票卡片）。
     """
     dm = get_dm()
-    codes = DEFAULT_STOCK_POOL[:limit]
+    codes = dm.stock_pool[:limit]
     end_date = datetime.now().strftime("%Y%m%d")
     start_date = (datetime.now() - timedelta(days=120)).strftime("%Y%m%d")
 
@@ -456,7 +646,7 @@ def download_data(
     """下载指定股票的历史数据到本地"""
     dm = get_dm()
     if codes is None:
-        codes = DEFAULT_STOCK_POOL
+        codes = dm.stock_pool
 
     success = []
     failed = []
@@ -534,7 +724,7 @@ def system_info():
     dm = get_dm()
     available = dm.get_available_stocks()
     return {
-        "stock_pool_size": len(DEFAULT_STOCK_POOL),
+        "stock_pool_size": len(dm.stock_pool),
         "available_stocks": len(available),
         "data_dir": DATA_DIR,
         "strategy": f"MA{MA_FAST} × MA{MA_SLOW}",
@@ -549,198 +739,3 @@ def system_info():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
-
-
-# ==================== 聊天室 + 认证模块 ====================
-import hashlib
-from pydantic import BaseModel
-from fastapi import Depends
-from sqlalchemy.orm import Session
-
-
-class LoginRequest(BaseModel):
-    username: str
-    password: str
-
-
-class RegisterRequest(BaseModel):
-    username: str
-    password: str
-
-
-class ChatSendRequest(BaseModel):
-    username: str
-    content: str
-
-
-def _hash_password(password: str) -> str:
-    """密码哈希"""
-    return hashlib.sha256(password.encode()).hexdigest()
-
-
-def _verify_quantseed_password(password: str) -> bool:
-    """验证量化模块密码"""
-    return password == "quantseed"
-
-
-# ==================== 认证 API ====================
-
-@app.post("/api/auth/login")
-def chat_login(req: LoginRequest):
-    """聊天室登录"""
-    db = get_db_session()
-    try:
-        user = db.query(ChatUser).filter_by(username=req.username).first()
-        if not user:
-            # 自动注册新用户
-            pw_hash = _hash_password(req.password)
-            new_user = ChatUser(username=req.username, password=pw_hash, is_admin=False)
-            db.add(new_user)
-            db.commit()
-            return {"success": True, "username": req.username, "is_admin": False, "is_new": True}
-
-        if user.password != _hash_password(req.password):
-            raise HTTPException(status_code=401, detail="密码错误")
-
-        # 更新最后登录时间
-        user.last_login = datetime.now()
-        db.commit()
-        return {"success": True, "username": req.username, "is_admin": user.is_admin, "is_new": False}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db.close()
-
-
-@app.post("/api/auth/register")
-def chat_register(req: RegisterRequest):
-    """聊天室注册"""
-    db = get_db_session()
-    try:
-        existing = db.query(ChatUser).filter_by(username=req.username).first()
-        if existing:
-            raise HTTPException(status_code=400, detail="用户名已存在")
-
-        pw_hash = _hash_password(req.password)
-        user = ChatUser(username=req.username, password=pw_hash, is_admin=False)
-        db.add(user)
-        db.commit()
-        return {"success": True, "username": req.username}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db.close()
-
-
-@app.post("/api/auth/verify-quantseed")
-def verify_quantseed(password: str):
-    """验证量化模块密码"""
-    if _verify_quantseed_password(password):
-        return {"success": True}
-    raise HTTPException(status_code=401, detail="密码错误")
-
-
-# ==================== 聊天消息 API ====================
-
-@app.get("/api/chat/messages")
-def get_chat_messages(
-    limit: int = Query(default=50, ge=1, le=200, description="获取条数"),
-):
-    """获取最近的聊天消息"""
-    db = get_db_session()
-    try:
-        messages = db.query(ChatMessage).order_by(ChatMessage.id.desc()).limit(limit).all()
-        result = []
-        for m in reversed(messages):
-            result.append({
-                "id": m.id,
-                "username": m.username,
-                "content": m.content,
-                "created_at": m.created_at.strftime("%H:%M:%S"),
-                "created_date": m.created_at.strftime("%Y-%m-%d"),
-                "created_full": m.created_at.strftime("%Y-%m-%d %H:%M:%S"),
-            })
-        return {"messages": result, "count": len(result)}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db.close()
-
-
-@app.post("/api/chat/send")
-def send_chat_message(req: ChatSendRequest):
-    """发送聊天消息"""
-    db = get_db_session()
-    try:
-        msg = ChatMessage(username=req.username, content=req.content)
-        db.add(msg)
-        db.commit()
-        db.refresh(msg)
-        return {
-            "success": True,
-            "message": {
-                "id": msg.id,
-                "username": msg.username,
-                "content": msg.content,
-                "created_at": msg.created_at.strftime("%H:%M:%S"),
-                "created_full": msg.created_at.strftime("%Y-%m-%d %H:%M:%S"),
-            }
-        }
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db.close()
-
-
-@app.delete("/api/chat/messages")
-def clear_chat_messages(username: str):
-    """管理员清空聊天记录"""
-    db = get_db_session()
-    try:
-        user = db.query(ChatUser).filter_by(username=username, is_admin=True).first()
-        if not user:
-            raise HTTPException(status_code=403, detail="仅管理员可清空聊天记录")
-
-        db.query(ChatMessage).delete()
-        db.commit()
-        return {"success": True, "message": "聊天记录已清空"}
-    except HTTPException:
-        raise
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db.close()
-
-
-@app.delete("/api/chat/messages/{message_id}")
-def delete_chat_message(message_id: int, username: str):
-    """删除单条消息（管理员或消息发送者）"""
-    db = get_db_session()
-    try:
-        user = db.query(ChatUser).filter_by(username=username).first()
-        if not user:
-            raise HTTPException(status_code=403, detail="用户不存在")
-
-        msg = db.query(ChatMessage).filter_by(id=message_id).first()
-        if not msg:
-            raise HTTPException(status_code=404, detail="消息不存在")
-
-        if not user.is_admin and msg.username != username:
-            raise HTTPException(status_code=403, detail="无权删除他人消息")
-
-        db.delete(msg)
-        db.commit()
-        return {"success": True}
-    except HTTPException:
-        raise
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db.close()

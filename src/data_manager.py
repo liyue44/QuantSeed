@@ -69,29 +69,40 @@ class DataManager:
 
     def _load_stock_pool(self) -> List[str]:
         """
-        加载股票池：优先从本地CSV文件读取，不存在则使用默认列表并自动保存。
+        加载股票池：默认35只 + 数据库中的用户自定义股票。
 
-        CSV格式：每行一个股票代码，如 000001.XSHE
-        第二阶段扩展点：可从数据库读取、或通过API动态获取成分股列表。
+        优先级：
+        1. 默认35只（DEFAULT_STOCK_POOL）始终包含
+        2. 从数据库 user_stocks 表读取用户自定义股票
+        3. 去重合并
         """
-        if os.path.exists(STOCK_LIST_FILE):
-            try:
-                df = pd.read_csv(STOCK_LIST_FILE, dtype=str)
-                if "code" in df.columns:
-                    codes = df["code"].str.strip().tolist()
-                else:
-                    codes = df.iloc[:, 0].str.strip().tolist()
-                logger.info(f"从文件加载股票池：{len(codes)} 只股票")
-                return codes
-            except Exception as e:
-                logger.warning(f"读取股票池文件失败：{e}，使用默认列表")
+        codes = list(DEFAULT_STOCK_POOL)
 
-        # 保存默认股票池到文件
-        df = pd.DataFrame({"code": DEFAULT_STOCK_POOL})
-        os.makedirs(os.path.dirname(STOCK_LIST_FILE), exist_ok=True)
-        df.to_csv(STOCK_LIST_FILE, index=False, encoding="utf-8-sig")
-        logger.info(f"已创建默认股票池文件：{STOCK_LIST_FILE}")
-        return DEFAULT_STOCK_POOL
+        # 尝试从数据库加载用户自定义股票
+        try:
+            from database import get_db_session, UserStock
+            db = get_db_session()
+            try:
+                user_stocks = db.query(UserStock).all()
+                for us in user_stocks:
+                    if us.code not in codes:
+                        codes.append(us.code)
+                if user_stocks:
+                    logger.info(f"从数据库加载了 {len(user_stocks)} 只自定义股票，总股票池 {len(codes)} 只")
+            finally:
+                db.close()
+        except Exception as e:
+            logger.debug(f"从数据库加载自定义股票失败（可能数据库未初始化）：{e}")
+
+        # 同步更新 CSV 文件
+        try:
+            df = pd.DataFrame({"code": codes})
+            os.makedirs(os.path.dirname(STOCK_LIST_FILE), exist_ok=True)
+            df.to_csv(STOCK_LIST_FILE, index=False, encoding="utf-8-sig")
+        except Exception as e:
+            logger.warning(f"更新股票池CSV文件失败：{e}")
+
+        return codes
 
     @staticmethod
     def _code_to_akshare(code: str) -> str:

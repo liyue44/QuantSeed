@@ -227,42 +227,24 @@ class SystemConfig(Base):
         return f"<SystemConfig {self.config_key}={self.config_value}>"
 
 
-class ChatUser(Base):
-    """聊天室用户表"""
-    __tablename__ = "chat_users"
+class UserStock(Base):
+    """用户自定义股票表"""
+    __tablename__ = "user_stocks"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    username = Column(String(50), unique=True, nullable=False, index=True, comment="用户名")
-    password = Column(String(255), nullable=False, comment="密码哈希")
-    is_admin = Column(Boolean, default=False, comment="是否管理员")
-    created_at = Column(DateTime, default=datetime.now)
-    last_login = Column(DateTime, nullable=True, comment="最后登录时间")
+    code = Column(String(20), unique=True, nullable=False, index=True, comment="股票代码")
+    name = Column(String(50), comment="股票名称")
+    exchange = Column(String(10), comment="交易所: XSHG/XSHE")
+    added_at = Column(DateTime, default=datetime.now, comment="添加时间")
 
     def __repr__(self):
-        return f"<ChatUser {self.username}>"
-
-
-class ChatMessage(Base):
-    """聊天消息表"""
-    __tablename__ = "chat_messages"
-    __table_args__ = (
-        Index("idx_chat_created", "created_at"),
-    )
-
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
-    username = Column(String(50), nullable=False, index=True, comment="发送者用户名")
-    content = Column(Text, nullable=False, comment="消息内容")
-    created_at = Column(DateTime, default=datetime.now, comment="发送时间")
-
-    def __repr__(self):
-        return f"<ChatMessage {self.username} {self.created_at}>"
+        return f"<UserStock {self.code} {self.name}>"
 
 
 # ==================== 数据库初始化 ====================
 
 def init_db():
     """创建所有表并初始化默认配置"""
-    import hashlib
     eng = _get_engine()
     Base.metadata.create_all(bind=eng)
 
@@ -270,14 +252,6 @@ def init_db():
     db = get_db_session()
     try:
         _init_default_config(db)
-
-        # 初始化 root 管理员账户（如果不存在）
-        existing_root = db.query(ChatUser).filter_by(username="root").first()
-        if not existing_root:
-            pw_hash = hashlib.sha256("root".encode()).hexdigest()
-            db.add(ChatUser(username="root", password=pw_hash, is_admin=True))
-            db.add(ChatUser(username="admin", password=pw_hash, is_admin=True))
-
         db.commit()
     except Exception:
         db.rollback()
