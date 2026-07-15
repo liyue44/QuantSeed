@@ -13,7 +13,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-API_BASE = os.environ.get("API_BASE_URL", "http://localhost:8000")
+API_BASE = os.environ.get("API_BASE_URL", "")
 
 st.set_page_config(
     page_title="聊天室 - QuantSeed",
