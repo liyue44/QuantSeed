@@ -406,11 +406,11 @@ def _render_step4_simulation(df, fast, slow):
         st.info("所选时间范围内没有完整的买卖配对（金叉→死叉）。")
         return
 
-    # 统计
+    # 统计（使用 profit_pct_raw 数值字段）
     total_trades = len(trades)
-    wins = sum(1 for t in trades if t["profit_pct"] > 0)
-    losses = sum(1 for t in trades if t["profit_pct"] <= 0)
-    total_return = sum(t["profit_pct"] for t in trades)
+    wins = sum(1 for t in trades if t["profit_pct_raw"] > 0)
+    losses = sum(1 for t in trades if t["profit_pct_raw"] <= 0)
+    total_return = sum(t["profit_pct_raw"] for t in trades)
     avg_return = total_return / total_trades if total_trades > 0 else 0
 
     col1, col2, col3, col4 = st.columns(4)
