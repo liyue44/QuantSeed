@@ -53,16 +53,18 @@ st.markdown("""
 <style>
     /* === 聊天容器 === */
     .chat-wrapper {
-        border: 1px solid rgba(255,255,255,0.08);
+        border: 1px solid rgba(255,255,255,0.1);
         border-radius: 14px;
         background: rgba(255,255,255,0.02);
         padding: 0.8rem;
-        max-height: 58vh;
+        height: 55vh;
         overflow-y: auto;
+        overflow-x: hidden;
         margin-bottom: 0.8rem;
         display: flex;
         flex-direction: column;
         gap: 0.5rem;
+        scroll-behavior: smooth;
     }
 
     /* === 消息气泡（他人 / 左侧） === */
@@ -269,26 +271,25 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# 消息展示区
-st.markdown('<div class="chat-wrapper" id="chat-box">', unsafe_allow_html=True)
+# 消息展示区（所有消息渲染在一个 div 内，支持滚动条）
 messages = chat_db.get_messages(limit=200)
+chat_html = '<div class="chat-wrapper" id="chat-box">'
 if not messages:
-    st.markdown('<p style="color:#546e7a;text-align:center;padding:2rem;">还没有消息，来说点什么吧~</p>',
-                unsafe_allow_html=True)
+    chat_html += '<p style="color:#546e7a;text-align:center;padding:2rem;">还没有消息，来说点什么吧~</p>'
 else:
     for msg in messages:
         is_self = (msg["username"] == my_username)
         cls = "chat-bubble self" if is_self else "chat-bubble"
-        st.markdown(f"""
+        chat_html += f"""
         <div class="{cls}">
             <div class="bubble-meta">
                 <span class="sender">{msg['username']}</span>
                 &nbsp;·&nbsp;{msg['created_at']}
             </div>
             <div class="bubble-box">{msg['content']}</div>
-        </div>
-        """, unsafe_allow_html=True)
-st.markdown('</div>', unsafe_allow_html=True)
+        </div>"""
+chat_html += '</div>'
+st.markdown(chat_html, unsafe_allow_html=True)
 
 # 消息输入区
 col_input, col_send = st.columns([5, 1])
@@ -354,15 +355,19 @@ st.markdown("""
         bindEnter();
     })();
 
-    // === 滚动到底部 ===
+    // === 滚动到底部（延迟确保 DOM 渲染完成） ===
     setTimeout(function() {
         var box = document.getElementById('chat-box');
         if (box) { box.scrollTop = box.scrollHeight; }
     }, 300);
+    setTimeout(function() {
+        var box = document.getElementById('chat-box');
+        if (box) { box.scrollTop = box.scrollHeight; }
+    }, 800);
 </script>
 """, unsafe_allow_html=True)
 
-# === 用 st.components 嵌入独立 iframe 做定时刷新（不依赖 st.markdown 的 script） ===
+# === 用 st.components 嵌入独立 iframe 做定时刷新 + 滚动到底部 ===
 import streamlit.components.v1 as components
 components.html("""
 <script>
@@ -378,6 +383,18 @@ components.html("""
             }
         } catch(e) {}
     }, 2000);
+
+    // 每次刷新后滚动到底部
+    var observer = new MutationObserver(function() {
+        var box = window.parent.document.getElementById('chat-box');
+        if (box) { box.scrollTop = box.scrollHeight; }
+    });
+    setTimeout(function() {
+        var chatBox = window.parent.document.getElementById('chat-box');
+        if (chatBox) {
+            observer.observe(chatBox, { childList: true, subtree: true, characterData: true });
+        }
+    }, 1000);
 </script>
 """, height=0)
 
