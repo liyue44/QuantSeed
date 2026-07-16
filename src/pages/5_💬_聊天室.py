@@ -32,43 +32,55 @@ def get_session_id() -> str:
 
 my_sid = get_session_id()
 
-# ==================== 获取客户端 IP（通过 query params） ====================
+# ==================== 获取客户端 IP（通过 query params / cookie） ====================
 def get_client_ip() -> str:
-    """获取客户端 IP，优先从 query params，fallback 到 Streamlit 内部"""
-    # 尝试从 query params 获取（由前端 JS 注入）
+    """获取客户端 IP"""
+    # 1. 尝试从 query params 获取（由前端 JS 注入）
     try:
         qp = st.query_params
         if "cip" in qp and qp["cip"]:
             return qp["cip"]
     except Exception:
         pass
-    # fallback: 用 session_id 哈希作为唯一标识（同一浏览器窗口一致）
+    # 2. 尝试从 cookie 获取
+    try:
+        from streamlit.web.server.websocket_headers import _get_websocket_headers
+        headers = _get_websocket_headers()
+        if headers:
+            forwarded = headers.get("X-Forwarded-For") or headers.get("X-Real-IP")
+            if forwarded:
+                return forwarded.split(",")[0].strip()
+    except Exception:
+        pass
+    # 3. fallback
     return f"sid:{my_sid}"
 
-# 用 JS 获取真实 IP 并注入到 URL query params（只需执行一次）
-if "cip_injected" not in st.session_state:
-    st.session_state.cip_injected = False
+# 用 JS 获取真实 IP 注入到 URL（静默执行，不阻塞页面）
+if "_cip_done" not in st.session_state:
+    st.session_state._cip_done = True
+    has_cip = False
+    try:
+        qp = st.query_params
+        has_cip = "cip" in qp and qp["cip"]
+    except Exception:
+        pass
+    if not has_cip:
+        components.html("""
+        <script>
+            fetch('https://api.ipify.org?format=json')
+                .then(r => r.json())
+                .then(data => {
+                    var url = new URL(window.parent.location.href);
+                    if (!url.searchParams.get('cip')) {
+                        url.searchParams.set('cip', data.ip);
+                        window.parent.history.replaceState({}, '', url.toString());
+                        window.parent.location.reload();
+                    }
+                })
+                .catch(() => {});
+        </script>
+        """, height=0)
 
-if not st.session_state.cip_injected:
-    components.html("""
-    <script>
-        // 通过公开 API 获取客户端真实公网 IP
-        fetch('https://api.ipify.org?format=json')
-            .then(r => r.json())
-            .then(data => {
-                var ip = data.ip;
-                var url = new URL(window.parent.location.href);
-                url.searchParams.set('cip', ip);
-                window.parent.history.replaceState({}, '', url.toString());
-                // 触发 Streamlit 重跑
-                window.parent.location.reload();
-            })
-            .catch(() => {});
-    </script>
-    """, height=0)
-    st.stop()
-
-st.session_state.cip_injected = True
 my_ip = get_client_ip()
 
 # ==================== Session State ====================
