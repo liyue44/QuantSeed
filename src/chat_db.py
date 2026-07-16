@@ -11,8 +11,12 @@ import urllib.request
 from datetime import datetime
 from typing import Optional
 
-# Server酱 配置
-SERVERCHAN_KEY = "SCT380382TbqIkbYMgw8jBSOGI11qVrlSG"
+# Server酱 配置（支持多个 SendKey，每个绑定不同微信）
+SERVERCHAN_KEYS = [
+    "SCT380382TbqIkbYMgw8jBSOGI11qVrlSG",
+    # 在此添加第二个 SendKey，例如：
+    # "SCT123456xxxxxxxxxxxxxxxxxxxxxxxx",
+]
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "chatroom.db")
 
@@ -51,18 +55,18 @@ def init_db():
 
 
 def _send_wx_notification(username: str, content: str):
-    """通过 Server酱 发送微信通知（异步，不阻塞）"""
-    try:
-        title = f"💬 [{username}] 发来新消息"
-        # 内容截断防止太长
-        short_content = content[:100] + ("..." if len(content) > 100 else "")
-        desp = f"## {username} 说：\n\n> {short_content}"
-        url = f"https://sctapi.ftqq.com/{SERVERCHAN_KEY}.send"
-        data = urllib.parse.urlencode({"title": title, "desp": desp}).encode("utf-8")
-        req = urllib.request.Request(url, data=data, method="POST")
-        urllib.request.urlopen(req, timeout=5)
-    except Exception:
-        pass  # 通知失败不影响主流程
+    """通过 Server酱 发送微信通知到所有配置的微信（异步，不阻塞）"""
+    title = f"💬 [{username}] 发来新消息"
+    short_content = content[:100] + ("..." if len(content) > 100 else "")
+    desp = f"## {username} 说：\n\n> {short_content}"
+    for key in SERVERCHAN_KEYS:
+        try:
+            url = f"https://sctapi.ftqq.com/{key}.send"
+            data = urllib.parse.urlencode({"title": title, "desp": desp}).encode("utf-8")
+            req = urllib.request.Request(url, data=data, method="POST")
+            urllib.request.urlopen(req, timeout=5)
+        except Exception:
+            pass  # 单个 Key 失败不影响其他 Key 和主流程
 
 
 def add_message(username: str, content: str) -> dict:

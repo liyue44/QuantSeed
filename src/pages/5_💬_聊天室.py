@@ -8,9 +8,9 @@
 """
 
 import streamlit as st
+import streamlit.components.v1 as components
 import sys
 import os
-import uuid
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -26,12 +26,50 @@ def get_session_id() -> str:
     ctx = get_script_run_ctx()
     if ctx:
         return ctx.session_id
-    # fallback
     if "_chat_sid" not in st.session_state:
         st.session_state._chat_sid = str(uuid.uuid4())
     return st.session_state._chat_sid
 
 my_sid = get_session_id()
+
+# ==================== 获取客户端 IP（通过 query params） ====================
+def get_client_ip() -> str:
+    """获取客户端 IP，优先从 query params，fallback 到 Streamlit 内部"""
+    # 尝试从 query params 获取（由前端 JS 注入）
+    try:
+        qp = st.query_params
+        if "cip" in qp and qp["cip"]:
+            return qp["cip"]
+    except Exception:
+        pass
+    # fallback: 用 session_id 哈希作为唯一标识（同一浏览器窗口一致）
+    return f"sid:{my_sid}"
+
+# 用 JS 获取真实 IP 并注入到 URL query params（只需执行一次）
+if "cip_injected" not in st.session_state:
+    st.session_state.cip_injected = False
+
+if not st.session_state.cip_injected:
+    components.html("""
+    <script>
+        // 通过公开 API 获取客户端真实公网 IP
+        fetch('https://api.ipify.org?format=json')
+            .then(r => r.json())
+            .then(data => {
+                var ip = data.ip;
+                var url = new URL(window.parent.location.href);
+                url.searchParams.set('cip', ip);
+                window.parent.history.replaceState({}, '', url.toString());
+                // 触发 Streamlit 重跑
+                window.parent.location.reload();
+            })
+            .catch(() => {});
+    </script>
+    """, height=0)
+    st.stop()
+
+st.session_state.cip_injected = True
+my_ip = get_client_ip()
 
 # ==================== Session State ====================
 if "chat_unlocked" not in st.session_state:
@@ -243,13 +281,22 @@ if not st.session_state.chat_unlocked:
     st.stop()
 
 
-# ==================== 用户名设置（每个浏览器窗口独立） ====================
+# ==================== 用户名设置（自动记忆，按 IP 记录） ====================
+# 尝试从数据库获取该 IP 上次使用的用户名
+saved_username = chat_db.get_username_by_ip(my_ip)
+
 if not my_username:
+    # 如果数据库有历史记录，直接自动进入，无需用户操作
+    if saved_username:
+        st.session_state[_uname_key] = saved_username
+        st.rerun()
+
+    # 首次访问，需要输入用户名
     st.markdown("""
     <div class="lock-box">
         <span class="lock-icon">👤</span>
         <h3 style="color:#e0e0e0;">设置你的昵称</h3>
-        <p style="color:#90a4ae; font-size:0.85rem;">每个人都需要输入自己的昵称</p>
+        <p style="color:#90a4ae; font-size:0.85rem;">输入一次，下次自动记住</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -257,6 +304,7 @@ if not my_username:
                                max_chars=20)
     if st.button("✅ 进入聊天", use_container_width=True, disabled=not name_input.strip()):
         st.session_state[_uname_key] = name_input.strip()
+        chat_db.save_ip_username(my_ip, name_input.strip())
         st.rerun()
     st.stop()
 
@@ -368,7 +416,6 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # === 用 st.components 嵌入独立 iframe 做定时刷新 + 滚动到底部 ===
-import streamlit.components.v1 as components
 components.html("""
 <script>
     // 每 2 秒点击父页面的刷新按钮
