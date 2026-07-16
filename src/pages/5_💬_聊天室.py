@@ -317,7 +317,7 @@ st.markdown("""
         }
     })();
 
-    // === Enter 发送 ===
+    // === Enter 发送（先清空再点击） ===
     (function() {
         var input = window.parent.document.querySelector('[data-testid="stTextArea"] textarea');
         if (input && !input._enterBound) {
@@ -326,13 +326,20 @@ st.markdown("""
                 if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
                     _chatInputFocused = false;
-                    var btns = window.parent.document.querySelectorAll('button');
-                    for (var i = 0; i < btns.length; i++) {
-                        if (btns[i].textContent.includes('发送')) {
-                            btns[i].click();
-                            break;
+                    // 先清空输入框
+                    var nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+                    nativeInputValueSetter.call(input, '');
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                    // 再点击发送
+                    setTimeout(function() {
+                        var btns = window.parent.document.querySelectorAll('button');
+                        for (var i = 0; i < btns.length; i++) {
+                            if (btns[i].textContent.includes('发送')) {
+                                btns[i].click();
+                                break;
+                            }
                         }
-                    }
+                    }, 50);
                 }
             });
         }
