@@ -359,24 +359,27 @@ st.markdown("""
         var box = document.getElementById('chat-box');
         if (box) { box.scrollTop = box.scrollHeight; }
     }, 300);
-
-    // === 每 1.5 秒自动刷新（防止重复定时器） ===
-    if (!window._chatRefreshTimer) {
-        window._chatRefreshTimer = setInterval(function() {
-            if (_chatInputFocused) return;
-            var doc = window.parent.document;
-            var allBtns = doc.querySelectorAll('button, [role="button"]');
-            for (var i = 0; i < allBtns.length; i++) {
-                var txt = allBtns[i].textContent || allBtns[i].innerText || '';
-                if (txt.indexOf('刷新消息') !== -1) {
-                    allBtns[i].click();
-                    return;
-                }
-            }
-        }, 1500);
-    }
 </script>
 """, unsafe_allow_html=True)
+
+# === 用 st.components 嵌入独立 iframe 做定时刷新（不依赖 st.markdown 的 script） ===
+import streamlit.components.v1 as components
+components.html("""
+<script>
+    // 每 2 秒点击父页面的刷新按钮
+    setInterval(function() {
+        try {
+            var btns = window.parent.document.querySelectorAll('button');
+            for (var i = 0; i < btns.length; i++) {
+                if (btns[i].textContent.indexOf('刷新消息') !== -1) {
+                    btns[i].click();
+                    break;
+                }
+            }
+        } catch(e) {}
+    }, 2000);
+</script>
+""", height=0)
 
 # 底部操作栏
 st.markdown("---")
