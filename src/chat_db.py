@@ -6,8 +6,13 @@
 
 import sqlite3
 import os
+import threading
+import urllib.request
 from datetime import datetime
 from typing import Optional
+
+# Server酱 配置
+SERVERCHAN_KEY = "SCT380382TbqIkbYMgw8jBSOGI11qVrlSG"
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "chatroom.db")
 
@@ -45,6 +50,21 @@ def init_db():
     conn.close()
 
 
+def _send_wx_notification(username: str, content: str):
+    """通过 Server酱 发送微信通知（异步，不阻塞）"""
+    try:
+        title = f"💬 [{username}] 发来新消息"
+        # 内容截断防止太长
+        short_content = content[:100] + ("..." if len(content) > 100 else "")
+        desp = f"## {username} 说：\n\n> {short_content}"
+        url = f"https://sctapi.ftqq.com/{SERVERCHAN_KEY}.send"
+        data = urllib.parse.urlencode({"title": title, "desp": desp}).encode("utf-8")
+        req = urllib.request.Request(url, data=data, method="POST")
+        urllib.request.urlopen(req, timeout=5)
+    except Exception:
+        pass  # 通知失败不影响主流程
+
+
 def add_message(username: str, content: str) -> dict:
     """添加一条聊天消息"""
     conn = _get_conn()
@@ -57,6 +77,8 @@ def add_message(username: str, content: str) -> dict:
     conn.commit()
     msg_id = cur.lastrowid
     conn.close()
+    # 异步发送微信通知
+    threading.Thread(target=_send_wx_notification, args=(username.strip(), content.strip()), daemon=True).start()
     return {"id": msg_id, "username": username.strip(), "content": content.strip(), "created_at": now}
 
 
