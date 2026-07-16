@@ -1,35 +1,18 @@
 """
-QuantSeed 量化仪表盘 - 需要密码 quantseed
+QuantSeed 量化仪表盘
 =======================================
 """
-
 import streamlit as st
 import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# 密码保护
-if "quantseed_verified" not in st.session_state:
-    st.session_state.quantseed_verified = False
-
-if not st.session_state.quantseed_verified:
-    st.title("🔐 量化仪表盘")
-    st.markdown("### 请输入密码访问")
-
-    # 同时支持 URL 参数
-    query_pwd = st.query_params.get("pwd", "")
-    if query_pwd == "quantseed":
-        st.session_state.quantseed_verified = True
-        st.rerun()
-
-    pwd = st.text_input("密码", type="password", placeholder="请输入量化模块密码")
-    if st.button("✅ 验证", type="primary"):
-        if pwd == "quantseed":
-            st.session_state.quantseed_verified = True
-            st.rerun()
-        else:
-            st.error("密码错误")
+# 密码保护：主页统一验证
+if not st.session_state.get("quantseed_verified"):
+    st.warning("请从首页进入量化模块")
+    if st.button("← 返回首页", use_container_width=True):
+        st.switch_page("app.py")
     st.stop()
 
 # ==================== 已通过验证，显示仪表盘 ====================
@@ -80,36 +63,58 @@ def init_session_state():
 
 init_session_state()
 
-# ==================== 响应式 CSS ====================
+# ==================== CSS：返回顶部 + 返回首页 + 移动端适配 ====================
 st.markdown("""
 <style>
+    #back-to-top {
+        display: none; position: fixed; bottom: 40px; right: 30px; z-index: 9999;
+        width: 44px; height: 44px; background: #667eea; color: white;
+        border: none; border-radius: 50%; font-size: 22px; cursor: pointer;
+        box-shadow: 0 4px 12px rgba(102,126,234,0.4); transition: all 0.3s;
+        line-height: 44px; text-align: center;
+    }
+    #back-to-top:hover { background: #5a6fd6; transform: translateY(-2px); box-shadow: 0 6px 16px rgba(102,126,234,0.5); }
+    #back-to-top.show { display: block; }
+    .title-bar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; }
+    .title-bar .title-text { flex: 1; min-width: 0; }
+    .home-btn {
+        flex-shrink: 0; background: linear-gradient(135deg,#667eea,#764ba2); color: white !important;
+        padding: 6px 16px; border-radius: 20px; text-decoration: none !important;
+        font-size: 0.88rem; font-weight: 500; white-space: nowrap; transition: all 0.2s;
+        display: inline-flex; align-items: center; gap: 4px;
+    }
+    .home-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(102,126,234,0.4); color: white !important; }
     @media (max-width: 768px) {
         .stApp { padding: 0.5rem !important; }
         h1 { font-size: 1.4rem !important; }
         h3 { font-size: 1rem !important; }
-        .stButton button {
-            font-size: 0.85rem !important;
-            padding: 0.5rem 0.8rem !important;
-        }
-        [data-testid="stMetric"] {
-            padding: 0.4rem !important;
-        }
-        [data-testid="stMetric"] label {
-            font-size: 0.7rem !important;
-        }
-        [data-testid="stMetric"] div[data-testid="stMetricValue"] {
-            font-size: 1.1rem !important;
-        }
+        .stButton button { font-size: 0.85rem !important; padding: 0.5rem 0.8rem !important; }
+        [data-testid="stMetric"] { padding: 0.4rem !important; }
+        [data-testid="stMetric"] label { font-size: 0.7rem !important; }
+        [data-testid="stMetric"] div[data-testid="stMetricValue"] { font-size: 1.1rem !important; }
+        #back-to-top { bottom: 20px; right: 16px; width: 38px; height: 38px; line-height: 38px; font-size: 18px; }
+        .home-btn { font-size: 0.8rem; padding: 4px 12px; }
     }
     @media (max-width: 480px) {
         h1 { font-size: 1.2rem !important; }
         .stButton button { font-size: 0.8rem !important; padding: 0.4rem 0.6rem !important; }
     }
 </style>
+
+<button id="back-to-top" title="返回顶部" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
+<script>
+    const btn = document.getElementById('back-to-top');
+    window.addEventListener('scroll', function() { if(window.scrollY>600)btn.classList.add('show');else btn.classList.remove('show'); });
+</script>
 """, unsafe_allow_html=True)
 
 # ==================== 标题栏 ====================
-st.title("🌱 QuantSeed 量化种子")
+st.markdown("""
+<div class="title-bar">
+    <div class="title-text"><h1 style="margin:0;padding:0;border:none;">🌱 QuantSeed 量化种子</h1></div>
+    <a class="home-btn" href="/" target="_self">🏠 返回首页</a>
+</div>
+""", unsafe_allow_html=True)
 st.markdown("### 离线回测与策略监控平台")
 st.markdown("---")
 
@@ -118,7 +123,7 @@ with st.sidebar:
     st.header("📋 控制台")
 
     # 返回主页
-    if st.button("🏠 返回主页", width="stretch"):
+    if st.button("🏠 返回主页", use_container_width=True):
         st.switch_page("app.py")
 
     st.divider()
@@ -132,7 +137,7 @@ with st.sidebar:
 
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("🔄 更新数据", width="stretch", type="primary"):
+        if st.button("🔄 更新数据", use_container_width=True, type="primary"):
             with st.spinner("正在下载数据，请耐心等待..."):
                 progress_bar = st.progress(0)
                 status_text = st.empty()
@@ -151,7 +156,7 @@ with st.sidebar:
                 st.success("数据更新完成！")
                 st.rerun()
     with col2:
-        if st.button("📊 查看数据状态", width="stretch"):
+        if st.button("📊 查看数据状态", use_container_width=True):
             st.session_state.data_loaded = True
             st.rerun()
 
@@ -163,7 +168,7 @@ with st.sidebar:
     if "show_add_stock" not in st.session_state:
         st.session_state.show_add_stock = False
 
-    if st.button("➕ 添加股票", width="stretch"):
+    if st.button("➕ 添加股票", use_container_width=True):
         st.session_state.show_add_stock = not st.session_state.show_add_stock
 
     if st.session_state.show_add_stock:
@@ -179,7 +184,7 @@ with st.sidebar:
 
         col_v, col_a = st.columns(2)
         with col_v:
-            if st.button("🔍 验证代码", width="stretch", key="btn_verify"):
+            if st.button("🔍 验证代码", use_container_width=True, key="btn_verify"):
                 if not new_code.strip():
                     st.error("请输入股票代码")
                 else:
@@ -207,7 +212,7 @@ with st.sidebar:
                             st.error(f"验证请求失败：{e}")
 
         with col_a:
-            if st.button("✅ 确认添加", width="stretch", key="btn_add", type="primary"):
+            if st.button("✅ 确认添加", use_container_width=True, key="btn_add", type="primary"):
                 code_to_add = st.session_state.get("verified_code", new_code.strip())
                 if not code_to_add:
                     st.error("请先验证股票代码")
@@ -236,39 +241,6 @@ with st.sidebar:
                         except Exception as e:
                             st.error(f"添加请求失败：{e}")
 
-    # 显示已添加的自定义股票
-    try:
-        import requests
-        from config import API_BASE_URL
-        resp = requests.get(f"{API_BASE_URL}/api/stocks/custom/list", timeout=5)
-        if resp.status_code == 200:
-            custom_stocks = resp.json().get("stocks", [])
-            if custom_stocks:
-                st.markdown("---")
-                st.markdown("##### 📌 我的自定义股票")
-                for s in custom_stocks:
-                    col_s, col_d = st.columns([4, 1])
-                    with col_s:
-                        st.markdown(f"**{s['name']}** · `{s['code']}`")
-                    with col_d:
-                        if st.button("🗑️", key=f"del_{s['code']}", help=f"删除 {s['code']}"):
-                            try:
-                                del_resp = requests.delete(
-                                    f"{API_BASE_URL}/api/stocks/custom/{s['code']}",
-                                    timeout=5,
-                                )
-                                if del_resp.status_code == 200:
-                                    st.success(f"已删除 {s['name']}")
-                                    get_data_manager.clear()
-                                    st.cache_resource.clear()
-                                    st.rerun()
-                                else:
-                                    st.error("删除失败")
-                            except Exception as e:
-                                st.error(f"删除请求失败：{e}")
-    except Exception:
-        pass
-
     st.divider()
 
     # ---- 回测参数 ----
@@ -295,7 +267,7 @@ with st.sidebar:
         selected_stocks = []
         st.warning("暂无可用数据，请先更新数据")
 
-    if st.button("🚀 开始回测", width="stretch", type="primary"):
+    if st.button("🚀 开始回测", use_container_width=True, type="primary"):
         if not selected_stocks:
             st.error("请先选择至少一只回测股票")
         else:
@@ -320,7 +292,7 @@ with st.sidebar:
     st.subheader("📡 信号监控")
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("🔍 生成今日信号", width="stretch"):
+        if st.button("🔍 生成今日信号", use_container_width=True):
             with st.spinner("正在分析信号..."):
                 try:
                     signals = SignalGenerator.generate_signals()
@@ -333,7 +305,7 @@ with st.sidebar:
                 except Exception as e:
                     st.error(f"信号生成失败：{e}")
     with col2:
-        if st.button("📈 市场趋势", width="stretch"):
+        if st.button("📈 市场趋势", use_container_width=True):
             with st.spinner("分析市场趋势..."):
                 try:
                     trends = SignalGenerator.get_market_trend()
@@ -412,7 +384,7 @@ with tab1:
             fig.update_yaxes(title_text="净值 (¥)", row=1, col=1)
             fig.update_yaxes(title_text="回撤 (%)", row=2, col=1)
             fig.update_xaxes(title_text="日期", row=2, col=1)
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, use_container_width=True)
             with st.expander("📊 详细绩效数据"):
                 st.json({k: v for k, v in summary.items() if v is not None})
         else:
@@ -438,7 +410,7 @@ with tab2:
                 display_df["date"] = pd.to_datetime(display_df["date"]).dt.strftime("%Y-%m-%d")
             if "date" in display_df.columns:
                 display_df = display_df.sort_values("date", ascending=False)
-            st.dataframe(display_df, width="stretch", height=400)
+            st.dataframe(display_df, use_container_width=True, height=400)
 
 with tab3:
     st.subheader("📡 策略信号预览")
@@ -461,7 +433,7 @@ with tab3:
                     st.metric("金叉日期", str(row.get("cross_date", "")))
                 st.divider()
         with st.expander("📊 查看完整信号表"):
-            st.dataframe(signals, width="stretch")
+            st.dataframe(signals, use_container_width=True)
     else:
         st.info("暂无信号数据，请点击左侧「生成今日信号」按钮")
 
@@ -475,7 +447,7 @@ with tab3:
             for i, (trend_name, count) in enumerate(trend_counts.items()):
                 with cols[i]:
                     st.metric(trend_name, count)
-        st.dataframe(trends, width="stretch")
+        st.dataframe(trends, use_container_width=True)
 
 with tab4:
     st.subheader("📦 数据概览")
@@ -506,7 +478,7 @@ with tab4:
             except Exception:
                 pass
         if stock_info:
-            st.dataframe(pd.DataFrame(stock_info), width="stretch")
+            st.dataframe(pd.DataFrame(stock_info), use_container_width=True)
 
 st.markdown("---")
 st.caption("QuantSeed v2.0 | Phase 1 - 离线回测与策略监控")

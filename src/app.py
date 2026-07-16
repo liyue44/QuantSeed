@@ -222,87 +222,96 @@ st.markdown(f"""
 # ==================== 功能入口卡片 ====================
 st.markdown("### 📱 功能模块")
 
-# 使用 Streamlit 原生 columns 做响应式
-col1, col2 = st.columns(2)
+# 初始化 session state
+if "quantseed_verified" not in st.session_state:
+    st.session_state.quantseed_verified = False
+if "show_quant_password" not in st.session_state:
+    st.session_state.show_quant_password = False
 
-with col1:
-    # 量化仪表盘（需密码）
-    st.markdown("""
-    <div class="feature-card">
-        <span class="feature-icon">📊</span>
-        <div class="feature-title">量化仪表盘</div>
-        <div class="feature-desc">双均线回测 · 交易明细<br>信号监控 · 数据概览</div>
-        <span class="feature-badge badge-locked">🔒 需要密码</span>
-    </div>
-    """, unsafe_allow_html=True)
+# ========== 量化模块（需密码） ==========
+st.markdown("""
+<div class="feature-card">
+    <span class="feature-icon">📊</span>
+    <div class="feature-title">量化</div>
+    <div class="feature-desc">仪表盘 · 知识库 · 算法可视化 · 行情<br>双均线回测 · 信号监控 · 量化学习</div>
+    <span class="feature-badge badge-locked">🔒 需要密码</span>
+</div>
+""", unsafe_allow_html=True)
 
-    if "quantseed_verified" not in st.session_state:
-        st.session_state.quantseed_verified = False
-
-    if st.button("🔐 进入仪表盘", key="btn_quant", width="stretch"):
+if not st.session_state.quantseed_verified:
+    if st.button("🔐 进入量化", key="btn_quant", use_container_width=True):
         st.session_state.show_quant_password = True
 
-    if st.session_state.get("show_quant_password"):
+    if st.session_state.show_quant_password:
         st.markdown('<div class="password-box">', unsafe_allow_html=True)
         st.markdown("#### 🔐 密码验证")
         pwd = st.text_input("请输入密码", type="password", key="quant_pwd_input",
                            placeholder="输入 quantseed")
         col_ok, col_cancel = st.columns(2)
         with col_ok:
-            if st.button("✅ 确认", width="stretch"):
+            if st.button("✅ 确认", use_container_width=True):
                 if pwd == "quantseed":
                     st.session_state.quantseed_verified = True
                     st.session_state.show_quant_password = False
-                    st.success("验证成功！正在跳转...")
-                    st.switch_page("pages/4_📊_量化仪表盘.py")
+                    st.success("验证成功！")
+                    st.rerun()
                 else:
                     st.error("密码错误")
         with col_cancel:
-            if st.button("❌ 取消", width="stretch"):
+            if st.button("❌ 取消", use_container_width=True):
                 st.session_state.show_quant_password = False
                 st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
+else:
+    st.success("✅ 已通过验证，请选择子模块：")
+    st.markdown("---")
+    col1, col2 = st.columns(2)
 
-with col2:
-    # 知识库（无需密码）
-    st.markdown("""
-    <div class="feature-card">
-        <span class="feature-icon">📖</span>
-        <div class="feature-title">量化知识库</div>
-        <div class="feature-desc">交互式词典 · 核心概念<br>随时查阅量化术语</div>
-        <span class="feature-badge badge-free">👤 免费开放</span>
-    </div>
-    """, unsafe_allow_html=True)
-    if st.button("📖 进入知识库", key="btn_kb", width="stretch"):
-        st.switch_page("pages/1_📖_量化交易知识库.py")
+    with col1:
+        # 量化仪表盘
+        st.markdown("""
+        <div class="feature-card">
+            <span class="feature-icon">📊</span>
+            <div class="feature-title">量化仪表盘</div>
+            <div class="feature-desc">双均线回测 · 交易明细<br>信号监控 · 数据概览</div>
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button("📊 进入仪表盘", key="btn_dashboard", use_container_width=True):
+            st.switch_page("pages/4_📊_量化仪表盘.py")
 
-col3, col4 = st.columns(2)
+        # 算法可视化
+        st.markdown("""
+        <div class="feature-card">
+            <span class="feature-icon">🔬</span>
+            <div class="feature-title">算法可视化</div>
+            <div class="feature-desc">双均线策略分步教学<br>看懂每一根K线</div>
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button("🔬 进入可视化", key="btn_av", use_container_width=True):
+            st.switch_page("pages/2_🔬_核心算法可视化解析.py")
 
-with col3:
-    # 算法可视化
-    st.markdown("""
-    <div class="feature-card">
-        <span class="feature-icon">🔬</span>
-        <div class="feature-title">算法可视化</div>
-        <div class="feature-desc">双均线策略分步教学<br>看懂每一根K线</div>
-        <span class="feature-badge badge-free">👤 免费开放</span>
-    </div>
-    """, unsafe_allow_html=True)
-    if st.button("🔬 进入可视化", key="btn_av", width="stretch"):
-        st.switch_page("pages/2_🔬_核心算法可视化解析.py")
+    with col2:
+        # 知识库
+        st.markdown("""
+        <div class="feature-card">
+            <span class="feature-icon">📖</span>
+            <div class="feature-title">量化知识库</div>
+            <div class="feature-desc">交互式词典 · 核心概念<br>随时查阅量化术语</div>
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button("📖 进入知识库", key="btn_kb", use_container_width=True):
+            st.switch_page("pages/1_📖_量化交易知识库.py")
 
-with col4:
-    # 行情演示
-    st.markdown("""
-    <div class="feature-card">
-        <span class="feature-icon">📡</span>
-        <div class="feature-title">行情演示</div>
-        <div class="feature-desc">实时行情面板 · K线解读<br>信号工单与趋势分析</div>
-        <span class="feature-badge badge-free">👤 免费开放</span>
-    </div>
-    """, unsafe_allow_html=True)
-    if st.button("📡 进入行情", key="btn_ls", width="stretch"):
-        st.switch_page("pages/3_📡_实时行情演示与信号解读.py")
+        # 行情演示
+        st.markdown("""
+        <div class="feature-card">
+            <span class="feature-icon">📡</span>
+            <div class="feature-title">行情演示</div>
+            <div class="feature-desc">实时行情面板 · K线解读<br>信号工单与趋势分析</div>
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button("📡 进入行情", key="btn_ls", use_container_width=True):
+            st.switch_page("pages/3_📡_实时行情演示与信号解读.py")
 
 # ==================== 页脚 ====================
 st.markdown("---")

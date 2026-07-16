@@ -105,7 +105,7 @@ def render_algorithm_visualizer():
 
     with col3:
         st.markdown("<br>", unsafe_allow_html=True)
-        if st.button("🔄 获取数据", type="primary", width="stretch"):
+        if st.button("🔄 获取数据", type="primary", use_container_width=True):
             st.session_state.viz_data_loaded = False
             st.rerun()
 
@@ -283,14 +283,14 @@ def _render_step1_raw_data(df, code, name):
 
     # K线图（Plotly）
     fig = _make_candlestick_chart(df, name, show_ma=False)
-    st.plotly_chart(fig, width="stretch")
+    st.plotly_chart(fig, use_container_width=True)
 
     # 数据预览表
     with st.expander("📊 查看原始数据（最近20条）"):
         display_df = df.tail(20)[["date", "open", "close", "high", "low", "amount"]].copy()
         display_df["date"] = display_df["date"].dt.strftime("%Y-%m-%d")
         display_df = display_df.sort_values("date", ascending=False)
-        st.dataframe(display_df, width="stretch", hide_index=True)
+        st.dataframe(display_df, use_container_width=True, hide_index=True)
 
 
 def _render_step2_ma(df, fast, slow):
@@ -326,7 +326,7 @@ def _render_step2_ma(df, fast, slow):
 
     # K线+均线图
     fig = _make_candlestick_chart(df, "收盘价 + 均线叠加", show_ma=True, fast=fast, slow=slow)
-    st.plotly_chart(fig, width="stretch")
+    st.plotly_chart(fig, use_container_width=True)
 
     st.info(
         f"💡 蓝色线是 MA{fast}（快线），更灵敏地反映短期价格变化；"
@@ -359,7 +359,7 @@ def _render_step3_signals(df, fast, slow):
 
     # K线图+均线+标注信号点
     fig = _make_candlestick_chart_with_signals(df, fast, slow)
-    st.plotly_chart(fig, width="stretch")
+    st.plotly_chart(fig, use_container_width=True)
 
     # 信号日期表
     if golden_count > 0 or death_count > 0:
@@ -385,7 +385,7 @@ def _render_step3_signals(df, fast, slow):
 
         if signal_rows:
             signal_df = pd.DataFrame(signal_rows)
-            st.dataframe(signal_df, width="stretch", hide_index=True)
+            st.dataframe(signal_df, use_container_width=True, hide_index=True)
     else:
         st.info("所选时间范围内未出现金叉或死叉信号。尝试扩大日期范围。")
 
@@ -427,7 +427,7 @@ def _render_step4_simulation(df, fast, slow):
     st.markdown("#### 📊 每笔交易明细")
     trade_df = pd.DataFrame(trades)
     trade_df["收益率"] = trade_df["profit_pct_raw"].apply(lambda x: f"{x:+.2f}%")
-    st.dataframe(trade_df, width="stretch", hide_index=True)
+    st.dataframe(trade_df, use_container_width=True, hide_index=True)
 
     # 收益分布图
     profit_values = [t["profit_pct_raw"] for t in trades]
@@ -449,7 +449,7 @@ def _render_step4_simulation(df, fast, slow):
         yaxis_title="收益率 (%)",
         margin=dict(l=10, r=10, t=40, b=10),
     )
-    st.plotly_chart(fig, width="stretch")
+    st.plotly_chart(fig, use_container_width=True)
 
 
 def _simulate_trades(df):

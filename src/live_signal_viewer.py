@@ -94,7 +94,7 @@ def render_live_signal_viewer():
 
     col1, col2, col3 = st.columns([2, 1, 1])
     with col1:
-        if st.button("🔄 刷新行情", type="primary", width="stretch"):
+        if st.button("🔄 刷新行情", type="primary", use_container_width=True):
             with st.spinner("正在获取最新行情数据..."):
                 try:
                     live_data = _fetch_live_data()
@@ -106,7 +106,7 @@ def render_live_signal_viewer():
 
     with col2:
         # 使用本地已缓存的数据作为备选
-        if st.button("📂 从本地数据加载", width="stretch"):
+        if st.button("📂 从本地数据加载", use_container_width=True):
             with st.spinner("从本地缓存加载..."):
                 live_data = _load_from_local()
                 st.session_state.live_data = live_data
@@ -379,7 +379,7 @@ def _render_stock_cards(df):
                 </div>
                 """, unsafe_allow_html=True)
 
-                if st.button(f"📊 查看详情", key=f"detail_{idx}", width="stretch"):
+                if st.button(f"📊 查看详情", key=f"detail_{idx}", use_container_width=True):
                     st.session_state.selected_stock_detail = row.to_dict()
                     st.rerun()
 
@@ -532,7 +532,7 @@ def _draw_detail_chart(df, name):
     fig.update_yaxes(title_text="成交额(亿)", row=2, col=1)
     fig.update_xaxes(title_text="日期", row=2, col=1)
 
-    st.plotly_chart(fig, width="stretch")
+    st.plotly_chart(fig, use_container_width=True)
 
 
 def _generate_interpretation(df, name, code):
@@ -705,8 +705,7 @@ def _render_work_order(df, name, code):
             data=json_str,
             file_name=f"signal_{code}_{signal_date}.json",
             mime="application/json",
-            width="stretch",
-        )
+            use_container_width=True, )
     with col2:
         txt_str = "\n".join(f"{k}: {v}" for k, v in work_order_data.items())
         st.download_button(
@@ -714,5 +713,4 @@ def _render_work_order(df, name, code):
             data=txt_str,
             file_name=f"signal_{code}_{signal_date}.txt",
             mime="text/plain",
-            width="stretch",
-        )
+            use_container_width=True, )
