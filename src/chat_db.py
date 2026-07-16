@@ -7,6 +7,7 @@
 import sqlite3
 import os
 from datetime import datetime
+from typing import Optional
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "chatroom.db")
 
@@ -115,7 +116,7 @@ def save_ip_username(ip_address: str, username: str):
     conn.close()
 
 
-def get_username_by_ip(ip_address: str) -> str | None:
+def get_username_by_ip(ip_address: str) -> Optional[str]:
     """根据IP地址获取最近使用的用户名"""
     conn = _get_conn()
     cur = conn.cursor()
