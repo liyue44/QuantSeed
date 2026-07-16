@@ -303,9 +303,20 @@ with col_send:
             st.session_state["_chat_last_count"] = chat_db.get_message_count()
             st.rerun()
 
-# Enter 发送 + 自动滚动到底部 + 每 5 秒自动刷新
+# Enter 发送 + 自动滚动到底部 + 每 1 秒自动刷新（不在输入时不打断）
 st.markdown("""
 <script>
+    var _chatInputFocused = false;
+
+    // === 追踪输入框焦点 ===
+    (function() {
+        var input = window.parent.document.querySelector('[data-testid="stTextArea"] textarea');
+        if (input) {
+            input.addEventListener('focus', function() { _chatInputFocused = true; });
+            input.addEventListener('blur', function() { _chatInputFocused = false; });
+        }
+    })();
+
     // === Enter 发送 ===
     (function() {
         var input = window.parent.document.querySelector('[data-testid="stTextArea"] textarea');
@@ -314,6 +325,7 @@ st.markdown("""
             input.addEventListener('keydown', function(e) {
                 if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
+                    _chatInputFocused = false;
                     var btns = window.parent.document.querySelectorAll('button');
                     for (var i = 0; i < btns.length; i++) {
                         if (btns[i].textContent.includes('发送')) {
@@ -332,8 +344,9 @@ st.markdown("""
         if (box) { box.scrollTop = box.scrollHeight; }
     }, 300);
 
-    // === 每 5 秒自动刷新（消息数变化时） ===
-    setTimeout(function() {
+    // === 每 1 秒自动刷新（仅在未输入时刷新，不打断用户） ===
+    setInterval(function() {
+        if (_chatInputFocused) return;  // 正在输入时不刷新
         var btns = window.parent.document.querySelectorAll('button');
         for (var i = 0; i < btns.length; i++) {
             if (btns[i].textContent.includes('刷新')) {
@@ -341,7 +354,7 @@ st.markdown("""
                 break;
             }
         }
-    }, 5000);
+    }, 1000);
 </script>
 """, unsafe_allow_html=True)
 
