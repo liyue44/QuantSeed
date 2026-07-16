@@ -303,34 +303,42 @@ with col_send:
             st.session_state["_chat_last_count"] = chat_db.get_message_count()
             st.rerun()
 
-# Enter 发送 + 自动滚动到底部 + 每 1 秒自动刷新（不在输入时不打断）
+# Enter 发送 + 自动滚动到底部 + 每 1.5 秒自动刷新
 st.markdown("""
 <script>
     var _chatInputFocused = false;
 
     // === 追踪输入框焦点 ===
     (function() {
-        var input = window.parent.document.querySelector('[data-testid="stTextArea"] textarea');
-        if (input) {
+        function bindInput() {
+            var input = window.parent.document.querySelector('[data-testid="stTextArea"] textarea');
+            if (!input) {
+                setTimeout(bindInput, 500);
+                return;
+            }
             input.addEventListener('focus', function() { _chatInputFocused = true; });
             input.addEventListener('blur', function() { _chatInputFocused = false; });
         }
+        bindInput();
     })();
 
     // === Enter 发送（先清空再点击） ===
     (function() {
-        var input = window.parent.document.querySelector('[data-testid="stTextArea"] textarea');
-        if (input && !input._enterBound) {
+        function bindEnter() {
+            var input = window.parent.document.querySelector('[data-testid="stTextArea"] textarea');
+            if (!input) {
+                setTimeout(bindEnter, 500);
+                return;
+            }
+            if (input._enterBound) return;
             input._enterBound = true;
             input.addEventListener('keydown', function(e) {
                 if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
                     _chatInputFocused = false;
-                    // 先清空输入框
                     var nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
                     nativeInputValueSetter.call(input, '');
                     input.dispatchEvent(new Event('input', { bubbles: true }));
-                    // 再点击发送
                     setTimeout(function() {
                         var btns = window.parent.document.querySelectorAll('button');
                         for (var i = 0; i < btns.length; i++) {
@@ -343,6 +351,7 @@ st.markdown("""
                 }
             });
         }
+        bindEnter();
     })();
 
     // === 滚动到底部 ===
@@ -351,17 +360,21 @@ st.markdown("""
         if (box) { box.scrollTop = box.scrollHeight; }
     }, 300);
 
-    // === 每 1 秒自动刷新（仅在未输入时刷新，不打断用户） ===
-    setInterval(function() {
-        if (_chatInputFocused) return;  // 正在输入时不刷新
-        var btns = window.parent.document.querySelectorAll('button');
-        for (var i = 0; i < btns.length; i++) {
-            if (btns[i].textContent.includes('刷新')) {
-                btns[i].click();
-                break;
+    // === 每 1.5 秒自动刷新（防止重复定时器） ===
+    if (!window._chatRefreshTimer) {
+        window._chatRefreshTimer = setInterval(function() {
+            if (_chatInputFocused) return;
+            var doc = window.parent.document;
+            var allBtns = doc.querySelectorAll('button, [role="button"]');
+            for (var i = 0; i < allBtns.length; i++) {
+                var txt = allBtns[i].textContent || allBtns[i].innerText || '';
+                if (txt.indexOf('刷新消息') !== -1) {
+                    allBtns[i].click();
+                    return;
+                }
             }
-        }
-    }, 1000);
+        }, 1500);
+    }
 </script>
 """, unsafe_allow_html=True)
 
