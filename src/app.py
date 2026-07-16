@@ -20,6 +20,35 @@ st.set_page_config(
     initial_sidebar_state=SIDEBAR_STATE,
 )
 
+# ==================== 防密码自动填充 + 隐藏未认证导航 ====================
+st.markdown("""
+<style>
+    input[type="password"] {
+        -webkit-text-security: disc !important;
+    }
+    .hide-quant-pages [data-testid="stSidebarNav"] a:not([href*="app"]) {
+        display: none !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+if not st.session_state.get("quantseed_verified", False):
+    st.markdown("""
+    <script>
+        document.body.classList.add('hide-quant-pages');
+        document.addEventListener('DOMContentLoaded', function() {
+            document.body.classList.add('hide-quant-pages');
+            var links = document.querySelectorAll('[data-testid="stSidebarNav"] a');
+            links.forEach(function(a) {
+                var href = a.getAttribute('href') || '';
+                if (!href.includes('app')) {
+                    a.style.display = 'none';
+                }
+            });
+        });
+    </script>
+    """, unsafe_allow_html=True)
+
 # ==================== 响应式 CSS ====================
 st.markdown("""
 <style>
@@ -246,7 +275,7 @@ if not st.session_state.quantseed_verified:
         st.markdown('<div class="password-box">', unsafe_allow_html=True)
         st.markdown("#### 🔐 密码验证")
         pwd = st.text_input("请输入密码", type="password", key="quant_pwd_input",
-                           placeholder="输入 quantseed")
+                           placeholder="输入 quantseed", autocomplete="new-password")
         col_ok, col_cancel = st.columns(2)
         with col_ok:
             if st.button("✅ 确认", use_container_width=True):
