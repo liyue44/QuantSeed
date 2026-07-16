@@ -26,7 +26,7 @@ st.markdown("""
     input[type="password"] {
         -webkit-text-security: disc !important;
     }
-    .hide-quant-pages [data-testid="stSidebarNav"] a:not([href*="app"]) {
+    .hide-quant-pages [data-testid="stSidebarNav"] a:not([href*="app"]):not([href*="5_"]):not([href*="%F0%9F%92%AC"]) {
         display: none !important;
     }
 </style>
@@ -41,7 +41,9 @@ if not st.session_state.get("quantseed_verified", False):
             var links = document.querySelectorAll('[data-testid="stSidebarNav"] a');
             links.forEach(function(a) {
                 var href = a.getAttribute('href') || '';
-                if (!href.includes('app')) {
+                // 隐藏量化子页面（1-4），保留聊天室（5）
+                var isChat = href.includes('5_') || href.includes('%F0%9F%92%AC');
+                if (!href.includes('app') && !isChat) {
                     a.style.display = 'none';
                 }
             });
@@ -266,6 +268,18 @@ st.markdown("""
     <span class="feature-badge badge-locked">🔒 需要密码</span>
 </div>
 """, unsafe_allow_html=True)
+
+# ========== 聊天室入口（独立密码，始终可见） ==========
+st.markdown("""
+<div class="feature-card">
+    <span class="feature-icon">💬</span>
+    <div class="feature-title">聊天室</div>
+    <div class="feature-desc">实时聊天 · 交流讨论<br>门锁密码保护 · IP 自动记忆</div>
+    <span class="feature-badge badge-locked">🔒 门锁密码</span>
+</div>
+""", unsafe_allow_html=True)
+if st.button("💬 进入聊天室", key="btn_chat", use_container_width=True):
+    st.switch_page("pages/5_💬_聊天室.py")
 
 if not st.session_state.quantseed_verified:
     if st.button("🔐 进入量化", key="btn_quant", use_container_width=True):
