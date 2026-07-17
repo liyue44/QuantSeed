@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>烧录座寿命智能监控系统 - 项目分析报告</title>
+<style>
+  :root { --bg: #0f1923; --card: #1a2733; --border: #2a3a4a; --text: #cdd6e4; --muted: #8899aa; --accent: #4fc3f7; --warn: #ffb74d; --danger: #ef5350; --green: #66bb6a; --purple: #ab47bc; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); line-height:1.75; }
+  .wrap { max-width: 1200px; margin:0 auto; padding:40px 24px; }
+  h1 { font-size:2rem; color:#fff; border-bottom:2px solid var(--accent); padding-bottom:12px; margin-bottom:32px; }
+  h2 { font-size:1.35rem; color:var(--accent); margin:36px 0 16px; padding-left:12px; border-left:4px solid var(--accent); }
+  h3 { font-size:1.1rem; color:#fff; margin:20px 0 10px; }
+  h4 { font-size:.95rem; color:var(--warn); margin:14px 0 8px; }
+  .meta { display:flex; gap:24px; flex-wrap:wrap; margin-bottom:28px; }
+  .meta-item { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:10px 18px; }
+  .meta-item span { color:var(--muted); font-size:.8rem; }
+  .meta-item strong { display:block; color:var(--accent); font-size:1rem; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:20px 24px; margin-bottom:18px; }
+  .card h4 { margin-top:0; }
+  .badge { display:inline-block; padding:2px 10px; border-radius:12px; font-size:.78rem; font-weight:600; margin-right:6px; margin-bottom:4px; }
+  .badge-m { background:#1a3a4a; color:var(--accent); }
+  .badge-c { background:#2a1a3a; color:var(--purple); }
+  .badge-v { background:#1a3a2a; color:var(--green); }
+  .badge-w { background:#3a2a0a; color:var(--warn); }
+  ul, ol { padding-left:20px; margin:8px 0; }
+  li { margin:4px 0; }
+  code { background:#0d151c; color:var(--accent); padding:1px 6px; border-radius:3px; font-size:.85em; }
+  pre { background:#0d151c; border:1px solid var(--border); border-radius:8px; padding:16px 20px; overflow-x:auto; font-size:.82rem; line-height:1.6; margin:10px 0; }
+  pre .cmt { color: #6a8759; }
+  pre .kw  { color: #cc7832; }
+  pre .str { color: #6a8759; }
+  pre .fn  { color: #ffc66d; }
+  pre .num { color: #6897bb; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .grid3 { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+  table { width:100%; border-collapse:collapse; margin:12px 0; font-size:.88rem; }
+  th { background:var(--border); color:#fff; padding:8px 12px; text-align:left; }
+  td { padding:8px 12px; border-bottom:1px solid var(--border); }
+  .flow { display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:12px 0; }
+  .flow-node { background:var(--card); border:1px solid var(--accent); border-radius:8px; padding:8px 16px; font-size:.85rem; white-space:nowrap; }
+  .flow-arr { color:var(--muted); font-size:1.2rem; }
+  .hl { color:var(--warn); }
+  .nav { position:sticky; top:0; background:var(--bg); z-index:10; padding:10px 0; border-bottom:1px solid var(--border); margin-bottom:24px; display:flex; gap:10px; flex-wrap:wrap; }
+  .nav a { color:var(--muted); text-decoration:none; font-size:.85rem; padding:4px 10px; border-radius:4px; transition:.2s; }
+  .nav a:hover { color:var(--accent); background:var(--card); }
+  @media (max-width:768px) { .grid2, .grid3 { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- 导航 -->
+<div class="nav">
+  <a href="#s1">项目概览</a>
+  <a href="#s2">架构设计</a>
+  <a href="#s3">前端页面</a>
+  <a href="#s4">数据流联动</a>
+  <a href="#s5">后端模块</a>
+  <a href="#s6">Store详解</a>
+  <a href="#s7">IPC通信</a>
+</div>
+
+<h1>烧录座寿命智能监控系统</h1>
+<p style="color:var(--muted);margin-bottom:24px;">SMT产线烧录座寿命管理 · Electron + Vue3 桌面应用 · 完整逐行分析报告</p>
+
+<div class="meta">
+  <div class="meta-item"><span>框架</span><strong>Vue 3 + Electron</strong></div>
+  <div class="meta-item"><span>构建工具</span><strong>Vite</strong></div>
+  <div class="meta-item"><span>UI库</span><strong>自定义CSS</strong></div>
+  <div class="meta-item"><span>数据库</span><strong>JSON文件</strong></div>
+  <div class="meta-item"><span>文件监控</span><strong>Chokidar</strong></div>
+  <div class="meta-item"><span>主控服务</span><strong>Express HTTP</strong></div>
+  <div class="meta-item"><span>文件监控格式</span><strong>*.txt</strong></div>
+  <div class="meta-item"><span>Electron版本</span><strong>22.0.0</strong></div>
+</div>
+
+<!-- ============================ 第一章 ============================ -->
+<h2 id="s1">第一章 · 项目概览</h2>
+
+<div class="card">
+  <h4>项目定位</h4>
+  <p>这是一套面向 SMT 产线/芯片烧录场景的 <strong>烧录座寿命智能监控系统</strong>。系统中每个烧录座有 1~4 个烧录头，设备通过特定格式的 <code>.txt</code> 文件上报 OK/NG/当前次数/累计次数。软件实时监控文件夹中文件的变化，统计每个烧录头的累计使用次数，结合预设的寿命阈值发出预警/警报，并支持报废管理、库存管理、维护记录等功能。</p>
+</div>
+
+<div class="card">
+<h4>核心功能清单</h4>
+<div class="grid3">
+ <div>
+  <span class="badge badge-v">监控</span> 文件夹监控 .txt 文件变化
+ </div>
+ <div>
+  <span class="badge badge-v">解析</span> 4头 OK/NG/次数 自动解析
+ </div>
+ <div>
+  <span class="badge badge-v">寿命</span> 型号级寿命阈值 预警/警报
+ </div>
+ <div>
+  <span class="badge badge-v">库存</span> Excel导入 型号+ID 库存管理
+ </div>
+ <div>
+  <span class="badge badge-w">维护</span> 探针/弹性/粉尘 维护检查记录
+ </div>
+ <div>
+  <span class="badge badge-w">报废</span> 自动扣减库存 报废记录追踪
+ </div>
+ <div>
+  <span class="badge badge-m">主控</span> 汇总所有分机数据 集中看板
+ </div>
+ <div>
+  <span class="badge badge-c">分机</span> 数据上报主控 接收主控指令
+ </div>
+ <div>
+  <span class="badge badge-m">监控站</span> 只读查看主控数据快照
+ </div>
+</div>
+</div>
+
+<div class="card">
+<h4>技术栈明细</h4>
+<table>
+<tr><th>层级</th><th>技术</th><th>说明</th></tr>
+<tr><td>前端</td><td>Vue 3 (Composition API)</td><td>所有页面使用 <code>setup()</code> 语法</td></tr>
+<tr><td>构建</td><td>Vite</td><td>fast HMR 开发，Rollup 打包</td></tr>
+<tr><td>桌面壳</td><td>Electron 22.0.0</td><td>主进程管理窗口、IPC、文件系统</td></tr>
+<tr><td>HTTP服务</td><td>Express</td><td>主控模式提供 REST API（分机上报/心跳/快照）</td></tr>
+<tr><td>文件监控</td><td>Chokidar</td><td>监听文件夹中 .txt 文件的增删改</td></tr>
+<tr><td>Excel解析</td><td>xlsx (SheetJS)</td><td>导入寿命/库存 Excel 文件</td></tr>
+<tr><td>数据存储</td><td>JSON文件 (6个)</td><td>每条路径一个JSON文件，持久化在 userData</td></tr>
+<tr><td>进程通信</td><td>IPC (contextBridge)</td><td>preload.js 暴露安全API给渲染进程</td></tr>
+<tr><td>崩溃处理</td><td>Crash Reporter + FS日志</td><td>捕获所有异常写入日志文件</td></tr>
+</table>
+</div>
+
+<!-- ============================ 第二章 ============================ -->
+<h2 id="s2">第二章 · 整体架构与角色模式</h2>
+
+<div class="card">
+<h4>三种运行角色</h4>
+<p>系统支持同一套代码以三种角色运行，通过界面 Setup 页配置切换：</p>
+
+<div class="grid3" style="margin-top:12px;">
+ <div class="card" style="border-color:var(--accent);">
+  <h4 style="color:var(--accent);">主控 (Master)</h4>
+  <p>启动 Express HTTP 服务（默认3456端口），接收所有分机上报数据，合并汇总统计。管理统一寿命配置、库存、维护记录。可向分机推送更新/删除指令。</p>
+  <p>核心：<code>server.js</code> + <code>watcher.js</code> 的 <code>masterStatsMap</code></p>
+ </div>
+ <div class="card" style="border-color:var(--purple);">
+  <h4 style="color:var(--purple);">分机 (Client)</h4>
+  <p>监控本地文件夹，数据变化后通过 HTTP POST 上报到主控。定时5秒心跳，接收主控回推的配置更新和删除指令。</p>
+  <p>核心：<code>client.js</code> 的 <code>reportToMaster()</code> + <code>sendHeartbeat()</code></p>
+ </div>
+ <div class="card" style="border-color:var(--green);">
+  <h4 style="color:var(--green);">监控站 (Monitor)</h4>
+  <p>只读模式，不监控本地文件夹。每3秒轮询主控的 <code>/api/snapshot</code> 获取完整数据快照，用于远程大屏展示。</p>
+  <p>核心：<code>main.js</code> 的 <code>fetchMonitorSnapshot()</code> + <code>monitorPollTimer</code></p>
+ </div>
+</div>
+</div>
+
+<div class="card">
+<h4>项目目录结构</h4>
+<pre>d:\Delta\test02\
+├── <span class="kw">electron/</span>              <span class="cmt">← 主进程代码 (Node.js 后端)</span>
+│   ├── main.js                  <span class="cmt">← 入口：窗口创建、IPC注册、角色管理、启动恢复</span>
+│   ├── preload.js               <span class="cmt">← contextBridge：安全暴露 electronAPI 给渲染进程</span>
+│   ├── watcher.js               <span class="cmt">← 文件监控核心：chokidar监听、解析txt、维护dataMap/statsMap</span>
+│   ├── server.js                <span class="cmt">← 主控HTTP服务：Express API (/report /heartbeat /snapshot)</span>
+│   ├── client.js                <span class="cmt">← 分机上报模块：上报数据、心跳、接收主控指令</span>
+│   ├── config-store.js          <span class="cmt">← 配置持久化：app-config.json 读写</span>
+│   ├── crash-logger.js          <span class="cmt">← 崩溃日志：全平台异常捕获、系统信息收集</span>
+│   ├── lifespan-store.js        <span class="cmt">← 寿命配置：Excel导入、阈值管理 (limit/warn/alert/ngAlert)</span>
+│   ├── socket-inventory-store.js <span class="cmt">← 库存管理：型号+ID库存、预警水位、Excel导入</span>
+│   ├── socket-maintenance-store.js <span class="cmt">← 维护记录：探针/弹性/粉尘检查、报废标记</span>
+│   ├── master-device-store.js   <span class="cmt">← 主控设备表：记录分机上报的device原始数据</span>
+│   └── scrap-records-store.js   <span class="cmt">← 报废记录：独立维护报废历史</span>
+├── <span class="kw">src/</span>                    <span class="cmt">← 渲染进程代码 (Vue 3 前端)</span>
+│   ├── main.js                  <span class="cmt">← Vue 入口：createApp、路由注册、测试数据插件</span>
+│   ├── App.vue                  <span class="cmt">← 根组件：路由容器、全局连接状态栏、声音播放</span>
+│   ├── composables/
+│   │   └── useTestData.js       <span class="cmt">← 测试数据 composable：生成/编辑/删除模拟txt文件</span>
+│   └── pages/
+│       ├── SetupPage.vue        <span class="cmt">← 角色设置页：主控/分机/监控三种模式配置</span>
+│       ├── DashboardPage.vue    <span class="cmt">← 监控看板页：核心数据表格、寿命预警、状态展示</span>
+│       ├── MonitorPage.vue      <span class="cmt">← 库存维护页：库存管理、维护检查、报废处理</span>
+│       ├── StatsPage.vue        <span class="cmt">← 统计图表页：使用次数趋势、机型分布（预留）</span>
+│       ├── AdminPage.vue        <span class="cmt">← 管理后台：所有数据CRUD、寿命/库存配置</span>
+│       └── SettingsPage.vue     <span class="cmt">← 设置页：声音、显示偏好、崩溃日志查看</span>
+├── <span class="kw">index.html</span>
+├── <span class="kw">package.json</span>
+└── <span class="kw">vite.config.js</span>
+</pre>
+</div>
+
+<!-- ============================ 第三章 ============================ -->
+<h2 id="s3">第三章 · 前端页面体系 (逐行注释)</h2>
+
+<div class="card">
+<h4>3.1 main.js — Vue 应用入口</h4>
+<pre><span class="cmt">// 导入 Vue 3 和路由</span>
+<span class="kw">import</span> { createApp } <span class="kw">from</span> <span class="str">'vue'</span>
+<span class="kw">import</span> App <span class="kw">from</span> <span class="str">'./App.vue'</span>
+<span class="kw">import</span> { createRouter, createWebHashHistory } <span class="kw">from</span> <span class="str">'vue-router'</span>
+
+<span class="cmt">// 导入所有6个页面组件</span>
+<span class="kw">import</span> SetupPage <span class="kw">from</span> <span class="str">'./pages/SetupPage.vue'</span>
+
+<span class="cmt">// 创建路由实例，使用 hash 模式（兼容 Electron file:// 协议）</span>
+<span class="kw">const</span> router = createRouter({
+  history: createWebHashHistory(),
+  routes: [
+    { path: <span class="str">'/'</span>, redirect: <span class="str">'/setup'</span> },   <span class="cmt">// 根路径重定向到设置页</span>
+    { path: <span class="str">'/setup'</span>,     component: SetupPage },    <span class="cmt">// 角色设置（首次启动入口）</span>
+    { path: <span class="str">'/dashboard'</span>, component: DashboardPage }, <span class="cmt">// 监控看板（主视图）</span>
+    { path: <span class="str">'/monitor'</span>,   component: MonitorPage },   <span class="cmt">// 库存维护管理</span>
+    { path: <span class="str">'/stats'</span>,     component: StatsPage },     <span class="cmt">// 统计图表（预留）</span>
+    { path: <span class="str">'/admin'</span>,     component: AdminPage },     <span class="cmt">// 管理后台 CRUD</span>
+    { path: <span class="str">'/settings'</span>,  component: SettingsPage },  <span class="cmt">// 设置页</span>
+  ]
+})
+
+<span class="cmt">// 全局混入：为所有组件注入 useTestData composable 的方法</span>
+app.use(router).mount(<span class="str">'#app'</span>)
+</pre>
+</div>
+
+<div class="card">
+<h4>3.2 App.vue — 根组件</h4>
+<pre><span class="cmt">// 模板结构</span>
+&lt;<span class="kw">div</span> class=<span class="str">"app"</span>&gt;
+  <span class="cmt">&lt;!-- 全局顶部连接状态栏 --&gt;</span>
+  &lt;header class=<span class="str">"top-bar"</span>&gt;
+    &lt;nav&gt; <span class="cmt">&lt;!-- 6个导航链接 --&gt;</span> &lt;/nav&gt;
+    &lt;status&gt; <span class="cmt">&lt;!-- 显示: 角色 | 主控IP:端口 | 分机数量 | 文件夹路径 --&gt;</span> &lt;/status&gt;
+  &lt;/header&gt;
+
+  <span class="cmt">&lt;!-- Vue Router 页面出口 --&gt;</span>
+  &lt;router-view /&gt;
+
+  <span class="cmt">&lt;!-- 底部状态栏 --&gt;</span>
+  &lt;footer&gt; 当前角色 / 连接状态 / 报废通知 Toast &lt;/footer&gt;
+&lt;/div&gt;
+
+<span class="cmt">// setup() 核心逻辑</span>
+setup() {
+  <span class="cmt">// 状态响应式数据</span>
+  <span class="kw">const</span> role = ref(null)           <span class="cmt">// 当前角色: 'master'|'client'|'monitor'|null</span>
+  <span class="kw">const</span> connectionStatus = ref(<span class="str">'未连接'</span>)
+
+  <span class="cmt">// 监听主进程推送的 watcher:update 事件（完整数据包）</span>
+  <span class="kw">const</span> unsub = window.electronAPI.onWatcherUpdate((data) => {
+    role.value = data.role             <span class="cmt">// 角色配置</span>
+    connectionStatus.value = data      <span class="cmt">// 含 serverInfo / clientStatuses</span>
+    <span class="cmt">// 播放报废通知声音</span>
+    <span class="kw">if</span> (data.scrapNotification) playSound(<span class="str">'scrap'</span>)
+  })
+
+  <span class="cmt">// 监听 connection:update 事件（2秒定时推送，仅连接信息）</span>
+  window.electronAPI.onConnectionUpdate((data) => {
+    connectionStatus.value = data      <span class="cmt">// 仅更新连接状态，不刷新数据</span>
+  })
+
+  onUnmounted(() => { unsubscribeAll() })
+}
+</pre>
+</div>
+
+<div class="card">
+<h4>3.3 SetupPage.vue — 角色设置页</h4>
+<p>应用首次启动或清空配置后的入口页面。提供三种角色的一键配置：</p>
+<ul>
+<li><strong>主控模式</strong>：输入端口号 → 调用 <code>electronAPI.setMaster(port)</code> → 启动 Express 服务 → 跳转 Dashboard</li>
+<li><strong>分机模式</strong>：输入分机ID、名称、主控IP:端口 → 先 <code>testConnection()</code> 验证可达 → <code>setClient(config)</code> → 启动心跳 — 可选先选择监控文件夹</li>
+<li><strong>监控模式</strong>：输入主控IP:端口 → <code>setMonitor(config)</code> → 启动3秒轮询</li>
+</ul>
+<p>每种模式配置完成后自动持久化到 <code>app-config.json</code>，下一次启动时会通过 <code>autoRestore()</code> 自动恢复。</p>
+</div>
+
+<div class="card">
+<h4>3.4 DashboardPage.vue — 监控看板（核心页面）</h4>
+<p><strong>这是系统最重要的数据展示页面</strong>，约700行代码，主要分为三个区域：</p>
+
+<h4>区域1：型号级寿命总览表</h4>
+<pre><span class="cmt">// 将寿命配置 (lifespanData) 与统计数据 (statRows) 按型号关联</span>
+<span class="cmt">// 每个型号一行，显示：</span>
+<span class="cmt">//   型号 | 寿命上限 | 在用设备数 | 最大使用次数 | 寿命百分比(进度条) | 状态标记</span>
+<span class="kw">const</span> adapterStats = computed(() => {
+  lifespanData.value.map(item => {
+    <span class="kw">const</span> devices = statRows.value.filter(s => s.model === item.adapter)
+    <span class="cmt">// 取该型号下所有设备中累计次数最大的</span>
+    <span class="kw">const</span> maxUsage = Math.max(...devices.map(d => d.usageCount || 0), 0)
+    <span class="kw">const</span> percent = (maxUsage / item.limit * 100)
+    <span class="kw">return</span> { model: item.adapter, limit: item.limit, percent, status: ... }
+  })
+})
+<span class="cmt">// 状态判定：>=100% 超寿命(红) | >=alertCount 警报(橙) | >=warnCount 预警(黄) | <warnCount 正常(绿)</span>
+</pre>
+
+<h4>区域2：设备级详细统计表（带折叠分组）</h4>
+<p>按型号分组，每个型号内展开显示每台设备(型号+机器ID)的每个烧录头独立统计：</p>
+<ul>
+<li>头1~4 的累计使用次数（从 <code>cumulativeCount</code> 数组取）</li>
+<li>每个头与寿命阈值比较，显示状态：🟢正常 / 🟡预警 / 🟠警报 / 🔴超寿命</li>
+<li>NG报警：当该头 NG 计数 > ngAlertCount 时标记</li>
+<li>报废标记：已报废设备灰色显示</li>
+<li>支持排序、筛选、隐藏已删除/隐藏/不活跃设备</li>
+</ul>
+
+<h4>区域3：批量操作工具栏</h4>
+<p>选择文件夹监控数据源、手动刷新数据、清空数据库、切换显示模式。</p>
+</div>
+
+<div class="card">
+<h4>3.5 MonitorPage.vue — 库存维护管理页</h4>
+<p>从 <code>watcher:update</code> 接收 <code>inventoryData</code> 和 <code>maintenanceData</code>：</p>
+<ul>
+<li><strong>库存面板</strong>：显示各型号库存数量、预警水位、使用数量。支持报废操作（自动调用 <code>markScrap</code> + <code>decrementStock</code>）</li>
+<li><strong>维护检查面板</strong>：对选中的烧录座进行三项检查 — 探针(Pin) OK/NG、弹性(Elasticity) OK/NG、粉尘(Dust) OK/NG<br>全部OK → maintenanceCount+1 + 自动抑制NG报警<br>任一NG → 标记报废</li>
+<li><strong>NG报警管理</strong>：可手动抑制/恢复NG报警</li>
+<li>分机模式下维护变更自动上报主控 <code>reportMaintenanceUpdate()</code></li>
+</ul>
+</div>
+
+<div class="card">
+<h4>3.6 AdminPage.vue — 管理后台</h4>
+<p>系统管理员工具，提供全部数据的原始查看和CRUD操作：</p>
+<ul>
+<li><strong>监控数据 Tab</strong>：调用 <code>adminGetMonitorData()</code> 获取统一数据视图 — 包含本机 record/stat + 所有分机的 record/stat，每一行标注 <code>source</code>（本机/分机名）</li>
+<li><strong>文件记录 Tab</strong>：<code>adminGetRecords()</code> 原始文件记录列表，支持编辑/删除</li>
+<li><strong>统计数据 Tab</strong>：<code>adminGetStats()</code> 按头统计的累计数据，支持编辑/删除</li>
+<li><strong>寿命配置 Tab</strong>：Excel 导入/手动新增/编辑/删除寿命阈值</li>
+<li><strong>库存配置 Tab</strong>：Excel 导入/新增/删除库存条目，修改预警水位</li>
+<li>主控模式下可通过"统一管理"对分机数据执行删除（通知分机同步删除）</li>
+</ul>
+</div>
+
+<div class="card">
+<h4>3.7 StatsPage.vue — 统计图表页（预留）</h4>
+<p>当前为框架页，预留图表区域。已接入 <code>statRows</code> 数据，可扩展为 ECharts 等可视化图表展示使用趋势。</p>
+</div>
+
+<div class="card">
+<h4>3.8 SettingsPage.vue — 设置页</h4>
+<ul>
+<li><strong>声音设置</strong>：报废通知/预警/警报三种音效的开关与音量调节，保存到 <code>config:saveSoundSettings</code></li>
+<li><strong>显示设置</strong>：隐藏不活跃设备开关、超时分钟数（<code>hideInactive</code> / <code>hideInactiveMinutes</code>）</li>
+<li><strong>崩溃日志</strong>：查看当前日志文件路径、历史日志文件列表、读取日志内容（用于排查问题）</li>
+<li><strong>危险操作</strong>：清空所有数据库（需二次确认）</li>
+</ul>
+</div>
+
+<div class="card">
+<h4>3.9 useTestData.js — 测试数据生成 Composable</h4>
+<p>提供在监控文件夹中生成/编辑/删除模拟 <code>.txt</code> 文件的功能：</p>
+<ul>
+<li><strong>文件命名格式</strong>：<code>型号_机器ID$02.txt</code>（如 <code>AT89S52_K001$02.txt</code>）</li>
+<li><strong>文件内容格式</strong>：<code>OK1:OK2:OK3:OK4\tNG1:NG2:NG3:NG4\t当前1:当前2:当前3:当前4\t累计1:累计2:累计3:累计4</code></li>
+<li>通过 IPC <code>testdata:write</code> / <code>testdata:delete</code> / <code>testdata:deleteAll</code> 操作文件系统</li>
+</ul>
+</div>
+
+<!-- ============================ 第四章 ============================ -->
+<h2 id="s4">第四章 · 核心数据流与联动关系</h2>
+
+<div class="card">
+<h4>4.1 数据采集链路</h4>
+<div class="flow">
+  <div class="flow-node">烧录设备</div>
+  <div class="flow-arr">→</div>
+  <div class="flow-node">写入 .txt 文件</div>
+  <div class="flow-arr">→</div>
+  <div class="flow-node" style="border-color:var(--green);">Chokidar 监听 add/change/unlink</div>
+  <div class="flow-arr">→</div>
+  <div class="flow-node">parseContent() 解析4组数据</div>
+  <div class="flow-arr">→</div>
+  <div class="flow-node" style="border-color:var(--warn);">updateStats() 按头独立统计</div>
+  <div class="flow-arr">→</div>
+  <div class="flow-node" style="border-color:var(--accent);">pushUpdate() 推送到渲染进程</div>
+</div>
+</div>
+
+<div class="card">
+<h4>4.2 数据格式详解</h4>
+<p><strong>文件名</strong>: <code>型号_机器ID$任意.txt</code></p>
+<p><strong>文件内容</strong> (以制表符分隔4组，每组用冒号分隔4个头):</p>
+<pre>OK组:  100:50:200:0     <span class="cmt">← 头1 OK=100, 头2 OK=50, 头3 OK=200, 头4 OK=0</span>
+NG组:  2:0:5:0          <span class="cmt">← 头1 NG=2,  头2 NG=0,  头3 NG=5,   头4 NG=0</span>
+当前组: 50:30:80:0       <span class="cmt">← 当前工单各头已烧录次数</span>
+累计组: 5000:3200:8000:0 <span class="cmt">← 此行最重要！各头累计总次数 = 寿命消耗</span>
+</pre>
+<p><strong>关键</strong>：解析后每个头独立创建一条 stat 记录（key=<code>型号|机器ID|头索引</code>），<code>usageCount</code> 取自累计次数组对应头位置的值。在 Dashboard 中每个设备会展开显示1~4行（按实际活跃头数）。</p>
+</div>
+
+<div class="card">
+<h4>4.3 主控→分机 数据联动</h4>
+<p>当主控端管理员修改了寿命配置、库存配置、维护数据等，需要同步到分机：</p>
+<div class="flow">
+  <div class="flow-node" style="border-color:var(--accent);">主控端操作</div>
+  <div class="flow-arr">→</div>
+  <div class="flow-node">queueLifespanBroadcast()<br>queueInventoryBroadcast()<br>queueMaintenancePush()</div>
+  <div class="flow-arr">→</div>
+  <div class="flow-node" style="border-color:var(--warn);">加入 updateQueue[clientId]</div>
+  <div class="flow-arr">→</div>
+  <div class="flow-node" style="border-color:var(--purple);">分机下次心跳<br>带 downloadCommands</div>
+  <div class="flow-arr">→</div>
+  <div class="flow-node">分机 applyUpdatesFromMaster()<br>更新本地 stores</div>
+  <div class="flow-arr">→</div>
+  <div class="flow-node">pushUpdate()<br>刷新UI</div>
+</div>
+</div>
+
+<div class="card">
+<h4>4.4 分机→主控 数据上报</h4>
+<div class="flow">
+  <div class="flow-node" style="border-color:var(--purple);">chokidar 监听到文件变化</div>
+  <div class="flow-arr">→</div>
+  <div class="flow-node">onDataChanged 回调</div>
+  <div class="flow-arr">→</div>
+  <div class="flow-node">reportToMaster({records, stats})</div>
+  <div class="flow-arr">→</div>
+  <div class="flow-node" style="border-color:var(--accent);">POST /api/report<br>最大3次重试</div>
+  <div class="flow-arr">→</div>
+  <div class="flow-node">主控: receiveFromClient()<br>写入 masterStatsMap</div>
+  <div class="flow-arr">→</div>
+  <div class="flow-node">主控: receiveRecords()<br>写入 master-device-db</div>
+  <div class="flow-arr">→</div>
+  <div class="flow-node">pushUpdate()<br>刷新主控UI</div>
+</div>
+<p>分机还通过 <strong>5秒心跳</strong> (<code>/api/heartbeat</code>) 维护连接状态，并接收主控下发的更新/删除指令。</p>
+</div>
+
+<div class="card">
+<h4>4.5 监控模式数据流</h4>
+<div class="flow">
+  <div class="flow-node" style="border-color:var(--green);">监控站 3秒定时器</div>
+  <div class="flow-arr">→</div>
+  <div class="flow-node">GET /api/snapshot</div>
+  <div class="flow-arr">→</div>
+  <div class="flow-node" style="border-color:var(--accent);">主控 snapshotProvider()<br>返回全部数据</div>
+  <div class="flow-arr">→</div>
+  <div class="flow-node">receiveRecords()<br>写入本地 stores</div>
+  <div class="flow-arr">→</div>
+  <div class="flow-node">pushUpdate()<br>刷新监控UI</div>
+</div>
+<p>监控站不写本地文件，完全通过 HTTP 快照同步主控数据，为只读视图。</p>
+</div>
+
+<!-- ============================ 第五章 ============================ -->
+<h2 id="s5">第五章 · Electron 后端模块详解</h2>
+
+<div class="card">
+<h4>5.1 main.js — 主进程入口（~1350行）</h4>
+<p><strong>启动流程</strong>：</p>
+<pre><span class="cmt">// 1. 32位兼容性检查：禁用GPU加速、WebGL、沙箱</span>
+<span class="kw">if</span> (process.arch === <span class="str">'ia32'</span>) {
+  app.commandLine.appendSwitch(<span class="str">'disable-gpu'</span>)
+  app.commandLine.appendSwitch(<span class="str">'disable-gpu-compositing'</span>)
+  <span class="cmt">// ... 其他5个禁用开关</span>
+}
+<span class="cmt">// 2. 所有平台：禁用 SkiaRenderer</span>
+app.commandLine.appendSwitch(<span class="str">'disable-features'</span>, <span class="str">'UseSkiaRenderer'</span>)
+
+<span class="cmt">// 3. 应用就绪后：</span>
+app.whenReady().then(async () => {
+  initCrashLogger()          <span class="cmt">// 初始化崩溃日志系统</span>
+  createWindow()             <span class="cmt">// 创建 BrowserWindow (1200x750)</span>
+  initMasterDeviceDB()       <span class="cmt">// 初始化主控设备数据库</span>
+  await autoRestore()        <span class="cmt">// 自动恢复上次角色和配置！</span>
+})
+</pre>
+
+<p><strong>自动恢复 (autoRestore)</strong>：如果 <code>app-config.json</code> 中存在角色配置，启动时自动恢复：
+主控→startServer / 分机→startHeartbeat+report / 监控→startMonitorPolling。这意味着产线断电重启后无需人工重新配置。</p>
+
+<p><strong>状态推送定时器</strong>：每2秒通过 <code>connection:update</code> 事件推送连接状态到渲染进程。</p>
+
+<p><strong>运行标记</strong>：<code>.running</code> 哨兵文件 — 正常退出时删除，若残留则判断上次异常退出（崩溃恢复检测）。</p>
+</div>
+
+<div class="card">
+<h4>5.2 watcher.js — 文件监控核心（~800行）</h4>
+<p><strong>核心数据结构</strong>：</p>
+<pre><span class="cmt">// dataMap: 文件路径 → 解析后的文件记录</span>
+Map&lt;filePath, { fileName, content, model, machineId, headCount, ok[], ng[], currentCount[], cumulativeCount[], ... }&gt;
+
+<span class="cmt">// statsMap: "型号|设备ID|头索引" → 统计记录（按头分开）</span>
+Map&lt;key, { model, machineId, headIdx, count, usageCount, updatedAt, deleted, hidden }&gt;
+
+<span class="cmt">// masterStatsMap: "型号|设备ID|分机ID" → 分机统计</span>
+<span class="cmt">// 仅主控模式使用，用于合并所有分机数据</span>
+Map&lt;key, { ...stat + clientId, clientName }&gt;
+</pre>
+
+<p><strong>文件名解析 (parseFileName)</strong>：<code>型号_机器ID$任意.txt</code> → 取第一个 <code>_</code> 之前的为型号，<code>_</code> 到 <code>$</code> 之间为机器ID。</p>
+
+<p><strong>内容解析 (parseContent)</strong>：按 <code>\t</code> (制表符) 分割4大组，每组按 <code>:</code> 分割4个头 → 分别得到 OK/NG/当前/累计的四头数组 → <code>usageCount = cumulativeCount[headIdx]</code>。</p>
+
+<p><strong>状态判定</strong>：
+<code>hidden</code>（手动隐藏）> <code>deleted</code>（异常：文件消失）> <code>standby</code>（5分钟无更新）> <code>active</code>（正常活跃）。</p>
+
+<p><strong>主控汇总 (getMasterStats)</strong>：合并本机 statsMap + 分机 masterStatsMap → 同型号同机器同头合并 → count累加 → usageCount取最大值。</p>
+
+<p><strong>统一监控数据 (getAllMonitorData)</strong>：返回本机 + 所有分机的 records 和 stats 统一数组，每行标注 source（本机/分机名）和 dataType（record/stat），供管理后台使用。</p>
+
+<p><strong>主控指令处理</strong>：
+<code>applyUpdatesFromMaster()</code> — 分机接收并执行主控的更新指令（维护/寿命/库存/stat_update/record_update）；
+<code>deleteLocalDataByCommand()</code> — 分机接收删除指令。</p>
+</div>
+
+<div class="card">
+<h4>5.3 server.js — 主控 HTTP 服务（~300行）</h4>
+<p>基于 Express 的 REST API 服务：</p>
+<table>
+<tr><th>端点</th><th>方法</th><th>说明</th></tr>
+<tr><td><code>/api/report</code></td><td>POST</td><td>分机上报统计数据。接收 {clientId, clientName, records, stats}，更新心跳记录，回调 main.js 的 serverCallback</td></tr>
+<tr><td><code>/api/heartbeat</code></td><td>POST</td><td>分机心跳（5秒间隔）。返回 {needResync, deleteCommands, updateCommands}。主控通过此通道下发更新/删除指令</td></tr>
+<tr><td><code>/api/ping</code></td><td>GET</td><td>分机测试连接用</td></tr>
+<tr><td><code>/api/maintenance-report</code></td><td>POST</td><td>分机上报维护变更（报废/全OK/NG抑制）。触发 onMaintenanceReport → 同步主控 + 广播其他分机</td></tr>
+<tr><td><code>/api/snapshot</code></td><td>GET</td><td>监控模式数据快照。调用 snapshotProvider() 返回全部数据</td></tr>
+</table>
+<p><strong>指令队列</strong>：<code>clientDeleteQueues</code> / <code>clientUpdateQueues</code> — 主控修改数据后不主动推送，而是放入队列，分机下次心跳时一并拉取。<br>
+<strong>去重</strong>：同类型同设备的更新只保留最新一条。<br>
+<strong>超时清理</strong>：30秒无心跳的分机自动从 <code>clientStatus</code> 移除。</p>
+</div>
+
+<div class="card">
+<h4>5.4 client.js — 分机上报模块（~180行）</h4>
+<p>分机作为 HTTP 客户端，向主控上报数据：</p>
+<ul>
+<li><strong>reportToMaster(data)</strong>：POST <code>/api/report</code>，发送 {clientId, clientName, records, stats}，失败自动重试最多3次（间隔1秒）</li>
+<li><strong>sendHeartbeat()</strong>：POST <code>/api/heartbeat</code>，检查响应中的 needResync → 触发重新上报；处理 updateCommands/deleteCommands → 调用回调更新本地</li>
+<li><strong>startHeartbeat()</strong>：每5秒发一次心跳</li>
+<li><strong>testConnection(host, port)</strong>：GET <code>/api/ping</code> 测试主控可达性</li>
+<li><strong>reportMaintenanceUpdate()</strong>：POST <code>/api/maintenance-report</code> 上报维护变更</li>
+<li><strong>回调</strong>：setResyncCallback / setDeleteCallback / setUpdateCallback 用于外部注入处理逻辑</li>
+</ul>
+</div>
+
+<div class="card">
+<h4>5.5 config-store.js — 配置持久化</h4>
+<p>单文件 JSON 存储（<code>app-config.json</code>），结构：</p>
+<pre>{
+  role: null | <span class="str">'master'</span> | <span class="str">'client'</span> | <span class="str">'monitor'</span>,
+  serverPort: <span class="num">3456</span>,       <span class="cmt">// 主控服务端口</span>
+  clientId: <span class="str">''</span>,           <span class="cmt">// 分机唯一ID</span>
+  clientName: <span class="str">''</span>,         <span class="cmt">// 分机显示名称</span>
+  masterHost: <span class="str">''</span>,         <span class="cmt">// 主控IP</span>
+  masterPort: <span class="num">3456</span>,       <span class="cmt">// 主控端口</span>
+  folderPath: <span class="str">''</span>,         <span class="cmt">// 监控文件夹路径</span>
+  hideInactive: false,      <span class="cmt">// 隐藏不活跃设备</span>
+  hideInactiveMinutes: <span class="num">30</span>  <span class="cmt">// 超时分钟数</span>
+}
+</pre>
+</div>
+
+<div class="card">
+<h4>5.6 crash-logger.js — 崩溃日志系统</h4>
+<p>全面的异常捕获和日志记录：</p>
+<ul>
+<li><strong>日志位置</strong>：exe 同级目录 <code>logs/</code> 下，按时间戳命名 <code>app_YYYY-MM-DD_HH-mm-ss.log</code></li>
+<li><strong>主进程异常</strong>：<code>uncaughtException</code>、<code>unhandledRejection</code>、<code>warning</code></li>
+<li><strong>渲染进程崩溃</strong>：<code>render-process-gone</code>（含退出码详细含义表）</li>
+<li><strong>GPU 崩溃</strong>：<code>gpu-process-crashed</code></li>
+<li><strong>窗口异常</strong>：<code>unresponsive</code> / <code>responsive</code> / <code>did-fail-load</code></li>
+<li><strong>系统信息</strong>：OS、CPU、内存、Electron版本、GPU状态</li>
+<li><strong>Crash Reporter</strong>：本地转储到 <code>temp/sockor-crashes</code></li>
+<li><strong>前端错误上报</strong>：<code>log:rendererError</code> IPC 事件</li>
+<li><strong>运行标记</strong>：<code>.running</code> 哨兵文件检测异常退出</li>
+</ul>
+</div>
+
+<!-- ============================ 第六章 ============================ -->
+<h2 id="s6">第六章 · Store 数据模块详解</h2>
+
+<div class="card">
+<h4>6.1 lifespan-store.js — 寿命配置管理</h4>
+<p>存储各型号烧录座的寿命阈值，位于 <code>machine-lifespan.json</code>：</p>
+<pre>每条记录: {
+  adapter: <span class="str">"AT89S52"</span>,        <span class="cmt">// 型号名</span>
+  limit: <span class="num">30000</span>,              <span class="cmt">// 寿命上限（累计次数超过此值即超寿命）</span>
+  warnCount: <span class="num">25000</span>,          <span class="cmt">// 预警阈值 = limit - 5000</span>
+  alertCount: <span class="num">28000</span>,         <span class="cmt">// 警报阈值 = limit - 2000</span>
+  ngAlertCount: <span class="num">0</span>           <span class="cmt">// NG报警阈值（测试中出现NG的次数）</span>
+}</pre>
+<p><strong>Excel 导入</strong>：列名 Adapter / Limit → 新增机型（去重）、已有机型如寿命不同则更新并重新计算默认阈值。<br>
+<strong>广播</strong>：主控更新后自动广播到所有分机。</p>
+</div>
+
+<div class="card">
+<h4>6.2 socket-inventory-store.js — 烧录座库存管理</h4>
+<p>两个文件：<code>socket-inventory.json</code>（库存条目）+ <code>socket-inventory-config.json</code>（型号级配置）：</p>
+<pre><span class="cmt">// 库存条目：每个型号+ID 一条</span>
+{ model: <span class="str">"AT89S52"</span>, machineId: <span class="str">"K001"</span>, stock: <span class="num">5</span> }
+
+<span class="cmt">// 型号级配置：预警水位、使用数量</span>
+{ <span class="str">"AT89S52"</span>: { warnLevel: <span class="num">5</span>, usedQty: <span class="num">2</span>, stockQty: <span class="num">10</span>, totalQty: <span class="num">12</span> } }
+</pre>
+<p><strong>核心功能</strong>：</p>
+<ul>
+<li>Excel 导入：解析合并单元格（型号级汇总 + 逐行ID），自动关联</li>
+<li><strong>decrementStock()</strong>：报废时自动 -1，库存为0则删除条目，返回型号剩余库存</li>
+<li><strong>getGrouped()</strong>：按型号分组聚合，供前端表格展示</li>
+<li>主控更新后自动广播到所有分机</li>
+</ul>
+</div>
+
+<div class="card">
+<h4>6.3 socket-maintenance-store.js — 维护记录</h4>
+<p>位于 <code>maintenance-data.json</code>，每条设备维护记录：</p>
+<pre>{
+  model, machineId,       <span class="cmt">// 设备标识</span>
+  pin: <span class="str">'OK'</span>|<span class="str">'NG'</span>|null,      <span class="cmt">// 探针检查结果</span>
+  elasticity: <span class="str">'OK'</span>|<span class="str">'NG'</span>|null, <span class="cmt">// 弹性检查结果</span>
+  dust: <span class="str">'OK'</span>|<span class="str">'NG'</span>|null,      <span class="cmt">// 粉尘检查结果</span>
+  maintenanceCount: <span class="num">0</span>,      <span class="cmt">// 维护次数（全部OK时才+1）</span>
+  lastMaintenanceTime: null, <span class="cmt">// 最后维护时间</span>
+  scrapTime: null,          <span class="cmt">// 报废时间（不为null表示已报废）</span>
+  ngAlarmSuppressed: false, <span class="cmt">// NG报警已抑制</span>
+  clientId: null            <span class="cmt">// 数据来源分机</span>
+}</pre>
+<p><strong>自动联动</strong>：三项检查全部OK → 自动抑制NG报警；任一NG → 标记报废 + 扣库存。<br>
+<strong>分机互通</strong>：分机报废自动上报主控 → 主控同步 + 广播给其他分机（排除上报分机）。</p>
+</div>
+
+<div class="card">
+<h4>6.4 master-device-store.js — 主控设备表</h4>
+<p>位于 <code>master-device-db.json</code>，<strong>仅主控模式使用</strong>。记录分机上报的原始 records 数据：</p>
+<pre>每条记录: {
+  model, machineId,        <span class="cmt">// 设备标识</span>
+  okTotal, currentCount, cumulativeCount,
+  headCount,
+  ok: [n,n,n,n], ng: [n,n,n,n],      <span class="cmt">// 四头数组</span>
+  currentArr: [n,n,n,n], cumulativeArr: [n,n,n,n],
+  updatedAt, clientId, clientName
+}</pre>
+<p>key = <code>型号|机器ID|分机ID</code>。用于管理后台查看原始分机数据和按型号合并展示（getAll() 会自动 merge 同型号同ID不同分机的数据）。</p>
+</div>
+
+<div class="card">
+<h4>6.5 scrap-records-store.js — 报废记录表</h4>
+<p>独立记录所有报废操作历史，位于 <code>scrap-records.json</code>：</p>
+<pre>{ model, machineId, scrapTime, cumulativeCount, source, operator }</pre>
+<p>每次 <code>markScrap</code> / <code>recordMaintenance(全NG)</code> / 分机上报报废时自动追加。前端通过 <code>scrapData</code> 字段在 Dashboard 中展示。</p>
+</div>
+
+<!-- ============================ 第七章 ============================ -->
+<h2 id="s7">第七章 · IPC 通信全清单</h2>
+
+<div class="card">
+<h4>7.1 preload.js — 安全API暴露</h4>
+<p>通过 <code>contextBridge.exposeInMainWorld('electronAPI', {...})</code> 暴露，所有API使用 <code>ipcRenderer.invoke</code> (异步双向)：</p>
+
+<div class="grid2">
+<div>
+<h4>文件对话框</h4>
+<pre>selectFolder()
+→ dialog:selectFolder</pre>
+</div>
+<div>
+<h4>文件监控</h4>
+<pre>startWatcher(folderPath)
+→ watcher:start
+stopWatcher()
+→ watcher:stop
+refreshData()
+→ data:refresh</pre>
+</div>
+<div>
+<h4>数据库</h4>
+<pre>getAllRecords / getStats
+getMasterStats / getClientStatuses
+getServerInfo / hideStats
+clearAllDB
+→ db:getAll / db:getStats / db:clearAll ...</pre>
+</div>
+<div>
+<h4>寿命管理</h4>
+<pre>importLifespan → lifespan:import
+getLifespan → lifespan:getAll
+updateLifespan → lifespan:update</pre>
+</div>
+<div>
+<h4>库存管理</h4>
+<pre>importInventory → inventory:import
+getInventoryGrouped → inventory:getGrouped
+addInventoryItem → inventory:addItem
+removeInventoryItem → inventory:removeItem
+updateInventoryConfig → inventory:updateConfig</pre>
+</div>
+<div>
+<h4>维护管理</h4>
+<pre>getMaintenance → maintenance:getAll
+updateMaintenance → maintenance:update
+recordMaintenance → maintenance:recordMaintenance
+markScrap → maintenance:markScrap
+isNgAlarmSuppressed → maintenance:isNgAlarmSuppressed
+suppressNgAlarm → maintenance:suppressNgAlarm</pre>
+</div>
+<div>
+<h4>管理后台</h4>
+<pre>adminGetRecords → admin:getRecords
+adminUpdateRecord → admin:updateRecord
+adminDeleteRecord → admin:deleteRecord
+adminGetStats → admin:getStats
+adminGetMonitorData → admin:getMonitorData
+adminDeleteMonitorData → admin:deleteMonitorData
+getMasterDevices → master:getDevices</pre>
+</div>
+<div>
+<h4>角色配置</h4>
+<pre>setMaster(port) → role:setMaster
+setClient(config) → role:setClient
+setMonitor(config) → role:setMonitor
+stopRole() → role:stop
+getRole() → role:get
+testConnection(host,port) → client:testConnection</pre>
+</div>
+<div>
+<h4>配置持久化</h4>
+<pre>getConfig → config:get
+saveConfig → config:save
+saveSoundSettings → config:saveSoundSettings
+clearConfig → config:clear</pre>
+</div>
+<div>
+<h4>测试数据</h4>
+<pre>testdataWrite → testdata:write
+testdataDelete → testdata:delete
+testdataDeleteAll → testdata:deleteAll</pre>
+</div>
+<div>
+<h4>崩溃日志</h4>
+<pre>getLogPath → log:getPath
+listLogFiles → log:listFiles
+readLogFile → log:read</pre>
+</div>
+<div>
+<h4>事件监听</h4>
+<pre>onWatcherUpdate(cb)
+→ listen 'watcher:update'
+onConnectionUpdate(cb)
+→ listen 'connection:update'</pre>
+</div>
+</div>
+</div>
+
+<div class="card">
+<h4>7.2 pushUpdate() — 核心数据推送</h4>
+<p>这是整个系统最核心的数据推送函数，每次任何数据变更后调用，通过 <code>watcher:update</code> 事件向渲染进程推送完整状态：</p>
+<pre>
+<span class="kw">mainWindow.webContents.send</span>(<span class="str">'watcher:update'</span>, {
+  records,            <span class="cmt">// getAllRecords() - 文件记录列表</span>
+  stats,              <span class="cmt">// getMasterStats() 或 getAllStats() - 按角色的统计数据</span>
+  role,               <span class="cmt">// 当前角色配置 {role, serverPort, clientId, ...}</span>
+  serverInfo,         <span class="cmt">// 主控服务状态 {running, ip, port}</span>
+  clientStatuses,     <span class="cmt">// 分机连接状态列表</span>
+  clientConfig,       <span class="cmt">// 分机配置</span>
+  folderPath,         <span class="cmt">// 当前监控文件夹</span>
+  lifespanData,       <span class="cmt">// 全部寿命配置</span>
+  inventoryData,      <span class="cmt">// 按型号分组的库存数据</span>
+  maintenanceData,    <span class="cmt">// 全部维护记录</span>
+  masterDevices,      <span class="cmt">// 主控设备数据</span>
+  scrapData,          <span class="cmt">// 报废记录列表</span>
+  hideInactive,       <span class="cmt">// 是否隐藏不活跃设备</span>
+  hideInactiveMinutes,<span class="cmt">// 超时分钟数</span>
+  scrapNotification,  <span class="cmt">// 报废通知（非null时前端播放声音+弹出Toast）</span>
+  lastSessionCrashed  <span class="cmt">// 上次是否异常退出</span>
+})
+</pre>
+<p>触发时机：<strong>文件变化回调</strong>、<strong>角色切换</strong>、<strong>数据库变更</strong>、<strong>手动刷新</strong>、<strong>监控模式快照拉取</strong>、<strong>分机接收主控指令后</strong>。</p>
+</div>
+
+<div class="card">
+<h4>7.3 关键数据通路汇总</h4>
+<table>
+<tr><th>操作</th><th>触发端</th><th>数据通路</th><th>最终效果</th></tr>
+<tr><td>文件写入</td><td>文件系统</td><td>chokidar → handleFileChange → updateStats → onDataChanged → reportToMaster (如分机) → pushUpdate</td><td>所有端UI实时刷新</td></tr>
+<tr><td>文件删除</td><td>文件系统</td><td>chokidar → handleFileDelete → markStatsDeleted → onDataChanged → reportToMaster → pushUpdate</td><td>设备标记为异常，UI灰显</td></tr>
+<tr><td>更新寿命</td><td>前端Admin</td><td>IPC lifespan:update → updateLifespan → saveAllLifespan → queueLifespanBroadcast</td><td>主控广播→分机心跳拉取→更新lifespan.json</td></tr>
+<tr><td>标记报废</td><td>前端Monitor</td><td>IPC maintenance:markScrap → addScrapRecord + decrementStock + queueInventoryBroadcast → pushUpdate</td><td>库存-1、报废声、通知所有分机</td></tr>
+<tr><td>心率跳变</td><td>分机client.js</td><td>5s setInterval → POST /api/heartbeat → drainUpdateCommands/drainDeleteCommands → 分机本地执行</td><td>分机静默同步主控变更</td></tr>
+<tr><td>监控拉取</td><td>监控站</td><td>3s setInterval → GET /api/snapshot → receiveRecords → pushUpdate</td><td>监控大屏实时刷新</td></tr>
+<tr><td>管理删除</td><td>主控Admin</td><td>IPC admin:deleteMonitorData → deleteMonitorDataOnMaster → notifyClientDelete → 分机心跳拉取deleteCommands → 执行</td><td>主控+分机数据同步删除</td></tr>
+</table>
+</div>
+
+<!-- ============================ 总结 ============================ -->
+<h2 id="s8">总结</h2>
+<div class="card" style="border-color:var(--accent);">
+<h4 style="color:var(--accent);">架构亮点</h4>
+<ol>
+<li><strong>三角色同构</strong>：同一套代码通过配置切换主控/分机/监控三种角色，减少维护成本</li>
+<li><strong>最终一致性</strong>：主控→分机采用心跳拉取而非实时推送，产线网络不稳定时也能可靠同步</li>
+<li><strong>按头独立统计</strong>：1个烧录座=1~4个头，每个头独立监控使用次数，精确到每个烧录头的寿命管理</li>
+<li><strong>自动恢复</strong>：断电重启后自动恢复角色和文件监控，无需人工干预</li>
+<li><strong>完善的崩溃处理</strong>：多层异常捕获（主进程/渲染进程/GPU）+ 运行标记检测异常退出</li>
+<li><strong>32位兼容</strong>：针对32位Windows系统禁用GPU加速避免崩溃</li>
+<li><strong>JSON文件存储</strong>：无需额外数据库依赖，所有数据持久化在 userData 目录的JSON文件中，方便备份和迁移</li>
+<li><strong>库存自动联动</strong>：报废自动扣库存 + 广播通知 + Toast消息 + 声音提示</li>
+</ol>
+</div>
+
+<div class="card">
+<h4>文件依赖全景图</h4>
+<pre style="font-size:.75rem;">
+                            electron/main.js (主进程入口)
+                           /         |          \
+                          /          |           \
+                   watcher.js    server.js    client.js
+                   (文件监控)    (HTTP服务)   (HTTP客户端)
+                  /    |    \       |            |
+                 /     |     \      |            |
+      ┌──────────┬──────────┬──────┴───┬──────────────┐
+      │          │           │          │               │
+  config-    lifespan-   socket-    socket-       master-device-
+  store.js   store.js   inventory-  maintenance-  store.js
+                         store.js   store.js
+      │          │           │          │               │
+      └──────────┴───────────┴──────────┴───────────────┘
+                              │
+                        preload.js (IPC桥)
+                              │
+                    ┌─────────┴──────────┐
+                    │     Vue 3 前端      │
+                    │  App.vue (根组件)   │
+                    │  /|\ 路由           │
+                    │ 6个Page组件         │
+                    └─────────────────────┘
+</pre>
+</div>
+
+<p style="text-align:center;color:var(--muted);margin:40px 0 10px;font-size:.85rem;">
+本文档由逐行代码分析生成 · 覆盖 electron/ (12个文件) + src/ (9个文件) 共21个源文件 · 总计约5000行代码
+</p>
+<p style="text-align:center;color:var(--muted);font-size:.8rem;">
+烧录座寿命智能监控系统 (Socket Lifespan Monitor) · Electron 22.0.0 + Vue 3 + Vite
+</p>
+
+</div>
+</body>
+</html>
