@@ -14,8 +14,7 @@ from typing import Optional
 # Server酱 配置（支持多个 SendKey，每个绑定不同微信）
 SERVERCHAN_KEYS = [
     "SCT380382TbqIkbYMgw8jBSOGI11qVrlSG",
-    # 在此添加第二个 SendKey，例如：
-    # "SCT123456xxxxxxxxxxxxxxxxxxxxxxxx",
+    "SCT383900Tum2I3oxcTN586XMDa2HqOP2K",
 ]
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "chatroom.db")
