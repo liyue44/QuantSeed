@@ -281,6 +281,18 @@ st.markdown("""
 if st.button("💬 进入聊天室", key="btn_chat", use_container_width=True):
     st.switch_page("pages/5_💬_聊天室.py")
 
+# ========== 薪资计算入口（独立密码，始终可见） ==========
+st.markdown("""
+<div class="feature-card">
+    <span class="feature-icon">💰</span>
+    <div class="feature-title">薪资计算</div>
+    <div class="feature-desc">时薪 · 加班 · 法定日倍率<br>日历记录 · 自动结算 · 数据持久化</div>
+    <span class="feature-badge badge-locked">🔒 需要密码</span>
+</div>
+""", unsafe_allow_html=True)
+if st.button("💰 进入薪资计算", key="btn_salary", use_container_width=True):
+    st.switch_page("pages/7_💰_薪资计算.py")
+
 if not st.session_state.quantseed_verified:
     if st.button("🔐 进入量化", key="btn_quant", use_container_width=True):
         st.session_state.show_quant_password = True
